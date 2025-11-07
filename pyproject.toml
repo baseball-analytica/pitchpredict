@@ -25,6 +25,7 @@ dependencies = [
     "numpy>=2.3.4",
     "pandas>=2.3.3",
     "pybaseball>=2.2.7",
+    "uvicorn>=0.38.0",
 ]
 
 [dependency-groups]
@@ -33,3 +34,6 @@ dev = [
     "pytest>=8.4.2",
     "ruff>=0.14.4",
 ]
+
+[project.scripts]
+pitchpredict = "pitchpredict.cli:run_cli"
