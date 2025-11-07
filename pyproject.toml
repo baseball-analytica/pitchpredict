@@ -1,18 +1,14 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["pitchpredict", "pitchpredict.models"]
-
-[project.entry-points."console_scripts"]
-pitchpredict = "pitchpredict.cli:main"
+[tool.hatch.build.targets.wheel]
+packages = ["src/pitchpredict"]
 
 [project]
 name = "pitchpredict"
-version = "0.2.6"
-description = "An open source utility for predicting what an MLB pitcher will throw in a given context"
+version = "0.3.0"
+description = "Predict MLB pitcher/batter behavior and outcomes using a given context"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
@@ -23,10 +19,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent"
 ]
+requires-python = ">=3.12"
 dependencies = [
-    "pybaseball>=2.2.6",
-    "pydantic>=2.9.2",
-    "numpy>=2.1.2",
-    "pandas>=2.2.3"
+    "fastapi>=0.121.0",
+    "numpy>=2.3.4",
+    "pandas>=2.3.3",
+    "pybaseball>=2.2.7",
 ]
-requires-python = ">=3.11"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+    "pytest>=8.4.2",
+    "ruff>=0.14.4",
+]
