@@ -7,6 +7,7 @@ from fastapi import FastAPI
 import uvicorn
 
 import pitchpredict.utils as utils
+import pitchpredict.types.server as server_types
 
 
 async def lifespan(app: FastAPI):
@@ -45,6 +46,22 @@ def read_root():
         "status": "running",
         "uptime": datetime.now() - app.state.start_time
     }
+
+
+@app.post("/predict/pitcher")
+async def predict_pitcher(request: server_types.PredictPitcherRequest) -> server_types.PredictPitcherResponse:
+    """
+    Predict the pitcher's next pitch and outcome.
+    """
+    raise NotImplementedError("Not implemented")
+
+
+@app.post("/predict/batter")
+async def predict_batter(request: server_types.PredictBatterRequest) -> server_types.PredictBatterResponse:
+    """
+    Predict the batter's next outcome.
+    """
+    raise NotImplementedError("Not implemented")
 
 
 def run_server(

@@ -25,6 +25,7 @@ dependencies = [
     "numpy>=2.3.4",
     "pandas>=2.3.3",
     "pybaseball>=2.2.7",
+    "rich>=14.2.0",
     "uvicorn>=0.38.0",
 ]
 
