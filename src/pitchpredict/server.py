@@ -3,9 +3,10 @@
 
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import uvicorn
 
+from pitchpredict.api import PitchPredict
 import pitchpredict.utils as utils
 import pitchpredict.types.server as server_types
 
@@ -26,6 +27,7 @@ async def _server_startup(app: FastAPI):
     Perform necessary startup tasks before the server is ready to handle requests.
     """
     app.state.start_time = datetime.now()
+    app.state.api = PitchPredict()
 
 
 async def _server_shutdown(app: FastAPI):
@@ -49,19 +51,63 @@ def read_root():
 
 
 @app.post("/predict/pitcher")
-async def predict_pitcher(request: server_types.PredictPitcherRequest) -> server_types.PredictPitcherResponse:
+async def predict_pitcher_endpoint(request: server_types.PredictPitcherRequest) -> server_types.PredictPitcherResponse:
     """
     Predict the pitcher's next pitch and outcome.
     """
-    raise NotImplementedError("Not implemented")
+    try:
+        api = app.state.api
+        result = await api.predict_pitcher(
+            pitcher_name=request.pitcher_name,
+            batter_name=request.batter_name,
+            balls=request.balls,
+            strikes=request.strikes,
+            score_bat=request.score_bat,
+            score_fld=request.score_fld,
+            game_date=request.game_date,
+            algorithm=request.algorithm,
+        )
+        return server_types.PredictPitcherResponse(
+            basic_pitch_data=result["basic_pitch_data"],
+            detailed_pitch_data=result["detailed_pitch_data"],
+            basic_outcome_data=result["basic_outcome_data"],
+            detailed_outcome_data=result["detailed_outcome_data"],
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/predict/batter")
-async def predict_batter(request: server_types.PredictBatterRequest) -> server_types.PredictBatterResponse:
+async def predict_batter_endpoint(request: server_types.PredictBatterRequest) -> server_types.PredictBatterResponse:
     """
     Predict the batter's next outcome.
     """
-    raise NotImplementedError("Not implemented")
+    try:
+        api = app.state.api
+        result = await api.predict_batter(
+            batter_name=request.batter_name,
+            pitcher_name=request.pitcher_name,
+            balls=request.balls,
+            strikes=request.strikes,
+            score_bat=request.score_bat,
+            score_fld=request.score_fld,
+            game_date=request.game_date,
+            pitch_type=request.pitch_type,
+            pitch_speed=request.pitch_speed,
+            pitch_x=request.pitch_x,
+            pitch_y=request.pitch_y,
+            algorithm=request.algorithm,
+        )
+        return server_types.PredictBatterResponse(
+            basic_outcome_data=result["basic_outcome_data"],
+            detailed_outcome_data=result["detailed_outcome_data"],
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def run_server(

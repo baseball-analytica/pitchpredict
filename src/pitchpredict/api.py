@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
-import os
 from typing import Any
 
 from pitchpredict.backend.caching import PitchPredictCache
@@ -57,4 +56,38 @@ class PitchPredict:
             if algorithm not in VALID_ALGORITHMS:
                 raise ValueError(f"unrecognized algorithm: {algorithm}")
 
-    
+    async def predict_pitcher(
+        self,
+        pitcher_name: str,
+        batter_name: str,
+        balls: int,
+        strikes: int,
+        score_bat: int,
+        score_fld: int,
+        game_date: str,
+        algorithm: str,
+    ) -> dict[str, Any]:
+        """
+        Given a context, predict the pitcher's next pitch and its outcome.
+        """
+        raise NotImplementedError("Not implemented")
+
+    async def predict_batter(
+        self,
+        batter_name: str,
+        pitcher_name: str,
+        balls: int,
+        strikes: int,
+        score_bat: int,
+        score_fld: int,
+        game_date: str,
+        pitch_type: str,
+        pitch_speed: float,
+        pitch_x: float,
+        pitch_y: float,
+        algorithm: str,
+    ) -> dict[str, Any]:
+        """
+        Given a context, predict the batter's next outcome.
+        """
+        raise NotImplementedError("Not implemented")
