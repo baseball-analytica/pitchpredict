@@ -164,58 +164,151 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "pitch_z_mean": pitch_z_mean,
                 "pitch_z_std": pitch_z_std,
             }
+
+            fastballs = pitches.loc[(pitches["pitch_type"] == "FF") | (pitches["pitch_type"] == "FC") | (pitches["pitch_type"] == "SI")]
+            prob_fastballs = fastballs.shape[0] / pitches.shape[0]
+            offspeed = pitches.loc[(pitches["pitch_type"] != "FF") & (pitches["pitch_type"] != "FC") & (pitches["pitch_type"] != "SI")]
+            prob_offspeed = offspeed.shape[0] / pitches.shape[0]
+
+            fastball_type_value_counts = fastballs["pitch_type"].value_counts()
+            fastball_type_probs = fastball_type_value_counts / fastball_type_value_counts.sum()
+            fastball_speed_mean = fastballs["release_speed"].mean()
+            fastball_speed_std = fastballs["release_speed"].std()
+            fastball_speed_p05 = fastballs["release_speed"].quantile(0.05)
+            fastball_speed_p25 = fastballs["release_speed"].quantile(0.25)
+            fastball_speed_p50 = fastballs["release_speed"].quantile(0.50)
+            fastball_speed_p75 = fastballs["release_speed"].quantile(0.75)
+            fastball_speed_p95 = fastballs["release_speed"].quantile(0.95)
+            fastball_x_mean = fastballs["plate_x"].mean()
+            fastball_x_std = fastballs["plate_x"].std()
+            fastball_x_p05 = fastballs["plate_x"].quantile(0.05)
+            fastball_x_p25 = fastballs["plate_x"].quantile(0.25)
+            fastball_x_p50 = fastballs["plate_x"].quantile(0.50)
+            fastball_x_p75 = fastballs["plate_x"].quantile(0.75)
+            fastball_x_p95 = fastballs["plate_x"].quantile(0.95)
+            fastball_z_mean = fastballs["plate_z"].mean()
+            fastball_z_std = fastballs["plate_z"].std()
+            fastball_z_p05 = fastballs["plate_z"].quantile(0.05)
+            fastball_z_p25 = fastballs["plate_z"].quantile(0.25)
+            fastball_z_p50 = fastballs["plate_z"].quantile(0.50)
+            fastball_z_p75 = fastballs["plate_z"].quantile(0.75)
+            fastball_z_p95 = fastballs["plate_z"].quantile(0.95)
+
+            offspeed_type_value_counts = offspeed["pitch_type"].value_counts()
+            offspeed_type_probs = offspeed_type_value_counts / offspeed_type_value_counts.sum()
+            offspeed_speed_mean = offspeed["release_speed"].mean()
+            offspeed_speed_std = offspeed["release_speed"].std()
+            offspeed_speed_p05 = offspeed["release_speed"].quantile(0.05)
+            offspeed_speed_p25 = offspeed["release_speed"].quantile(0.25)
+            offspeed_speed_p50 = offspeed["release_speed"].quantile(0.50)
+            offspeed_speed_p75 = offspeed["release_speed"].quantile(0.75)
+            offspeed_speed_p95 = offspeed["release_speed"].quantile(0.95)
+            offspeed_x_mean = offspeed["plate_x"].mean()
+            offspeed_x_std = offspeed["plate_x"].std()
+            offspeed_x_p05 = offspeed["plate_x"].quantile(0.05)
+            offspeed_x_p25 = offspeed["plate_x"].quantile(0.25)
+            offspeed_x_p50 = offspeed["plate_x"].quantile(0.50)
+            offspeed_x_p75 = offspeed["plate_x"].quantile(0.75)
+            offspeed_x_p95 = offspeed["plate_x"].quantile(0.95)
+            offspeed_z_mean = offspeed["plate_z"].mean()
+            offspeed_z_std = offspeed["plate_z"].std()
+            offspeed_z_p05 = offspeed["plate_z"].quantile(0.05)
+            offspeed_z_p25 = offspeed["plate_z"].quantile(0.25)
+            offspeed_z_p50 = offspeed["plate_z"].quantile(0.50)
+            offspeed_z_p75 = offspeed["plate_z"].quantile(0.75)
+            offspeed_z_p95 = offspeed["plate_z"].quantile(0.95)
+
+            pitch_speed_p05 = pitches["release_speed"].quantile(0.05)
+            pitch_speed_p25 = pitches["release_speed"].quantile(0.25)
+            pitch_speed_p50 = pitches["release_speed"].quantile(0.50)
+            pitch_speed_p75 = pitches["release_speed"].quantile(0.75)
+            pitch_speed_p95 = pitches["release_speed"].quantile(0.95)
+            pitch_x_p05 = pitches["plate_x"].quantile(0.05)
+            pitch_x_p25 = pitches["plate_x"].quantile(0.25)
+            pitch_x_p50 = pitches["plate_x"].quantile(0.50)
+            pitch_x_p75 = pitches["plate_x"].quantile(0.75)
+            pitch_x_p95 = pitches["plate_x"].quantile(0.95)
+            pitch_z_p05 = pitches["plate_z"].quantile(0.05)
+            pitch_z_p25 = pitches["plate_z"].quantile(0.25)
+            pitch_z_p50 = pitches["plate_z"].quantile(0.50)
+            pitch_z_p75 = pitches["plate_z"].quantile(0.75)
+            pitch_z_p95 = pitches["plate_z"].quantile(0.95)
+
             detailed = {
-                "pitch_prob_fastball": "TODO",
-                "pitch_prob_offspeed": "TODO",
-                "pitch_fastball_data": {
-                    "pitch_type_probs": "TODO",
-                    "pitch_speed_mean": "TODO",
-                    "pitch_speed_std": "TODO",
-                    "pitch_speed_p05": "TODO",
-                    "pitch_speed_p25": "TODO",
-                    "pitch_speed_p50": "TODO",
-                    "pitch_speed_p75": "TODO",
-                    "pitch_speed_p95": "TODO",
-                    "pitch_x_mean": "TODO",
-                    "pitch_x_std": "TODO",
-                    "pitch_x_p05": "TODO",
-                    "pitch_x_p25": "TODO",
-                    "pitch_x_p50": "TODO",
-                    "pitch_x_p75": "TODO",
-                    "pitch_x_p95": "TODO",
-                    "pitch_z_mean": "TODO",
-                    "pitch_z_std": "TODO",
-                    "pitch_z_p05": "TODO",
-                    "pitch_z_p25": "TODO",
-                    "pitch_z_p50": "TODO",
-                    "pitch_z_p75": "TODO",
-                    "pitch_z_p95": "TODO",
+                "pitch_prob_fastball": prob_fastballs,
+                "pitch_prob_offspeed": prob_offspeed,
+                "pitch_data_fastballs": {
+                    "pitch_type_probs": fastball_type_probs.to_dict(),
+                    "pitch_speed_mean": fastball_speed_mean,
+                    "pitch_speed_std": fastball_speed_std,
+                    "pitch_speed_p05": fastball_speed_p05,
+                    "pitch_speed_p25": fastball_speed_p25,
+                    "pitch_speed_p50": fastball_speed_p50,
+                    "pitch_speed_p75": fastball_speed_p75,
+                    "pitch_speed_p95": fastball_speed_p95,
+                    "pitch_x_mean": fastball_x_mean,
+                    "pitch_x_std": fastball_x_std,
+                    "pitch_x_p05": fastball_x_p05,
+                    "pitch_x_p25": fastball_x_p25,
+                    "pitch_x_p50": fastball_x_p50,
+                    "pitch_x_p75": fastball_x_p75,
+                    "pitch_x_p95": fastball_x_p95,
+                    "pitch_z_mean": fastball_z_mean,
+                    "pitch_z_std": fastball_z_std,
+                    "pitch_z_p05": fastball_z_p05,
+                    "pitch_z_p25": fastball_z_p25,
+                    "pitch_z_p50": fastball_z_p50,
+                    "pitch_z_p75": fastball_z_p75,
+                    "pitch_z_p95": fastball_z_p95,
                 },
-                "pitch_offspeed_data": {
-                    "pitch_type_probs": "TODO",
-                    "pitch_speed_mean": "TODO",
-                    "pitch_speed_std": "TODO",
-                    "pitch_speed_p05": "TODO",
-                    "pitch_speed_p25": "TODO",
-                    "pitch_speed_p50": "TODO",
-                    "pitch_speed_p75": "TODO",
-                    "pitch_speed_p95": "TODO",
-                    "pitch_x_mean": "TODO",
-                    "pitch_x_std": "TODO",
-                    "pitch_x_p05": "TODO",
-                    "pitch_x_p25": "TODO",
-                    "pitch_x_p50": "TODO",
-                    "pitch_x_p75": "TODO",
-                    "pitch_x_p95": "TODO",
-                    "pitch_z_mean": "TODO",
-                    "pitch_z_std": "TODO",
-                    "pitch_z_p05": "TODO",
-                    "pitch_z_p25": "TODO",
-                    "pitch_z_p50": "TODO",
-                    "pitch_z_p75": "TODO",
-                    "pitch_z_p95": "TODO",
+                "pitch_data_offspeed": {
+                    "pitch_type_probs": offspeed_type_probs.to_dict(),
+                    "pitch_speed_mean": offspeed_speed_mean,
+                    "pitch_speed_std": offspeed_speed_std,
+                    "pitch_speed_p05": offspeed_speed_p05,
+                    "pitch_speed_p25": offspeed_speed_p25,
+                    "pitch_speed_p50": offspeed_speed_p50,
+                    "pitch_speed_p75": offspeed_speed_p75,
+                    "pitch_speed_p95": offspeed_speed_p95,
+                    "pitch_x_mean": offspeed_x_mean,
+                    "pitch_x_std": offspeed_x_std,
+                    "pitch_x_p05": offspeed_x_p05,
+                    "pitch_x_p25": offspeed_x_p25,
+                    "pitch_x_p50": offspeed_x_p50,
+                    "pitch_x_p75": offspeed_x_p75,
+                    "pitch_x_p95": offspeed_x_p95,
+                    "pitch_z_mean": offspeed_z_mean,
+                    "pitch_z_std": offspeed_z_std,
+                    "pitch_z_p05": offspeed_z_p05,
+                    "pitch_z_p25": offspeed_z_p25,
+                    "pitch_z_p50": offspeed_z_p50,
+                    "pitch_z_p75": offspeed_z_p75,
+                    "pitch_z_p95": offspeed_z_p95,
                 },
-                "pitch_overall_data": "TODO",
+                "pitch_data_overall": {
+                    "pitch_type_probs": pitch_type_probs.to_dict(),
+                    "pitch_speed_mean": pitch_speed_mean,
+                    "pitch_speed_std": pitch_speed_std,
+                    "pitch_speed_p05": pitch_speed_p05,
+                    "pitch_speed_p25": pitch_speed_p25,
+                    "pitch_speed_p50": pitch_speed_p50,
+                    "pitch_speed_p75": pitch_speed_p75,
+                    "pitch_speed_p95": pitch_speed_p95,
+                    "pitch_x_mean": pitch_x_mean,
+                    "pitch_x_std": pitch_x_std,
+                    "pitch_x_p05": pitch_x_p05,
+                    "pitch_x_p25": pitch_x_p25,
+                    "pitch_x_p50": pitch_x_p50,
+                    "pitch_x_p75": pitch_x_p75,
+                    "pitch_x_p95": pitch_x_p95,
+                    "pitch_z_mean": pitch_z_mean,
+                    "pitch_z_std": pitch_z_std,
+                    "pitch_z_p05": pitch_z_p05,
+                    "pitch_z_p25": pitch_z_p25,
+                    "pitch_z_p50": pitch_z_p50,
+                    "pitch_z_p75": pitch_z_p75,
+                    "pitch_z_p95": pitch_z_p95,
+                },
             }
 
             return basic, detailed
