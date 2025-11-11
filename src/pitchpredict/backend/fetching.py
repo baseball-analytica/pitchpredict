@@ -45,6 +45,34 @@ async def get_pitches_from_pitcher(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def get_pitches_to_batter(
+    batter_id: int,
+    start_date: str,
+    end_date: str | None = None,
+) -> pd.DataFrame:
+    """
+    Given a batter's MLBAM ID, get a list of all the pitches thrown to them between `start_date` and `end_date`.
+    """
+    if end_date is None:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+    try:
+        pitches = pybaseball.statcast_batter(
+            start_dt=start_date,
+            end_dt=end_date,
+            player_id=batter_id,
+        )
+
+        if pitches.empty:
+            raise HTTPException(status_code=404, detail=f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}")
+
+        return pitches
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 async def get_player_id_from_name(
     player_name: str,
     fuzzy_lookup: bool = True,

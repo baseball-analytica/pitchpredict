@@ -8,7 +8,7 @@ from fastapi import HTTPException
 import pandas as pd
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
-from pitchpredict.backend.fetching import get_pitches_from_pitcher, get_player_id_from_name
+from pitchpredict.backend.fetching import get_pitches_from_pitcher, get_pitches_to_batter, get_player_id_from_name
 
 
 class SimilarityAlgorithm(PitchPredictAlgorithm):
@@ -45,11 +45,13 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             similar_pitches = await self._get_similar_pitches(
                 pitches=pitches,
                 batter_id=batter_id,
+                pitcher_id=pitcher_id,
+                is_batter=False,
                 balls=balls,
                 strikes=strikes,
                 score_bat=score_bat,
                 score_fld=score_fld,
-                game_date=game_date,
+                game_date=game_date
             )
 
             basic_pitch_data, detailed_pitch_data = await self._digest_pitch_data(similar_pitches)
@@ -80,17 +82,46 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         Predict the batter's next outcome.
         """
-        raise NotImplementedError("Not implemented")
+        try:
+            pitcher_id = await get_player_id_from_name(pitcher_name)
+            batter_id = await get_player_id_from_name(batter_name)
+
+            pitches = await get_pitches_to_batter(batter_id, game_date)
+
+            similar_pitches = await self._get_similar_pitches(
+                pitches=pitches,
+                batter_id=batter_id,
+                pitcher_id=pitcher_id,
+                is_batter=True,
+                balls=balls,
+                strikes=strikes,
+                score_bat=score_bat,
+                score_fld=score_fld,
+                game_date=game_date
+            )
+
+            basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(similar_pitches, pitch_type, pitch_speed, pitch_x, pitch_z)
+
+            print(basic_outcome_data)
+            print(detailed_outcome_data)
+
+            raise NotImplementedError("Not implemented")
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
     async def _get_similar_pitches(
         self,
         pitches: pd.DataFrame,
         batter_id: int,
+        pitcher_id: int,
         balls: int,
         strikes: int,
         score_bat: int,
         score_fld: int,
         game_date: str,
+        is_batter: bool = False,
         sample_pctg: float = 0.005,
     ) -> pd.DataFrame:
         """
@@ -98,8 +129,12 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         try:
             # append "similarity score" column to pitches for each parameter
-            # 'score_batter_name': 1 if batter_name is the same as the batter in the pitch, 0 otherwise
-            pitches["score_batter_name"] = pitches["batter"].apply(lambda x: 1 if x == batter_id else 0)
+            if is_batter:
+                # 'score_pitcher_name': 1 if pitcher_name is the same as the pitcher in the pitch, 0 otherwise
+                pitches["score_pitcher_name"] = pitches["pitcher"].apply(lambda x: 1 if x == pitcher_id else 0)
+            else:
+                # 'score_batter_name': 1 if batter_name is the same as the batter in the pitch, 0 otherwise
+                pitches["score_batter_name"] = pitches["pitcher"].apply(lambda x: 1 if x == pitcher_id else 0)
             # 'score_balls': 1 if balls is the same as the balls in the pitch, 0 otherwise
             pitches["score_balls"] = pitches["balls"].apply(lambda x: 1 if x == balls else 0)
             # 'score_strikes': 1 if strikes is the same as the strikes in the pitch, 0 otherwise
@@ -113,7 +148,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # create a single similarity score: a weighted average of the individual similarity scores above
             pitches["similarity_score"] = (
-                pitches["score_batter_name"] * 0.35 +
+                (pitches["score_batter_name"] if not is_batter else pitches["score_pitcher_name"]) * 0.35 +
                 pitches["score_balls"] * 0.2 +
                 pitches["score_strikes"] * 0.2 +
                 pitches["score_score_bat"] * 0.1 +
@@ -309,6 +344,41 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                     "pitch_z_p75": pitch_z_p75,
                     "pitch_z_p95": pitch_z_p95,
                 },
+            }
+
+            return basic, detailed
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def _digest_outcome_data(
+        self,
+        pitches: pd.DataFrame,
+        pitch_type: str,
+        pitch_speed: float,
+        pitch_x: float,
+        pitch_z: float,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """
+        Create a final summary of the outcome data.
+        """
+        try:
+            outcome_value_counts = pitches["type"].value_counts()
+            outcome_probs = outcome_value_counts / outcome_value_counts.sum()
+            
+            new_column_names = {
+                "S": "strike",
+                "B": "ball",
+                "X": "contact",
+            }
+
+            basic = {
+                "outcome_probs": outcome_probs.rename(index=new_column_names).to_dict(),
+            }
+
+            detailed = {
+                "TODO": "TODO",
             }
 
             return basic, detailed
