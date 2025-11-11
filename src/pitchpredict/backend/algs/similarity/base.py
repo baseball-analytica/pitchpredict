@@ -42,11 +42,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             pitches = await get_pitches_from_pitcher(pitcher_id, game_date)
 
-            similar_pitches = await self._get_similar_pitches(
+            similar_pitches = await self._get_similar_pitches_for_pitcher(
                 pitches=pitches,
                 batter_id=batter_id,
-                pitcher_id=pitcher_id,
-                is_batter=False,
                 balls=balls,
                 strikes=strikes,
                 score_bat=score_bat,
@@ -56,10 +54,21 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             basic_pitch_data, detailed_pitch_data = await self._digest_pitch_data(similar_pitches)
 
-            print(basic_pitch_data)
-            print(detailed_pitch_data)
+            basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(
+                pitches=similar_pitches,
+                pitch_type=list(basic_pitch_data["pitch_type_probs"].keys())[0],
+                pitch_speed=basic_pitch_data["pitch_speed_mean"],
+                pitch_x=basic_pitch_data["pitch_x_mean"],
+                pitch_z=basic_pitch_data["pitch_z_mean"],
+            )
 
-            raise NotImplementedError("Not implemented")
+            return {
+                "basic_pitch_data": basic_pitch_data,
+                "detailed_pitch_data": detailed_pitch_data,
+                "basic_outcome_data": basic_outcome_data,
+                "detailed_outcome_data": detailed_outcome_data,
+            }
+
         except HTTPException as e:
             raise e
         except Exception as e:
@@ -88,53 +97,49 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             pitches = await get_pitches_to_batter(batter_id, game_date)
 
-            similar_pitches = await self._get_similar_pitches(
+            similar_pitches = await self._get_similar_pitches_for_batter(
                 pitches=pitches,
-                batter_id=batter_id,
                 pitcher_id=pitcher_id,
-                is_batter=True,
                 balls=balls,
                 strikes=strikes,
                 score_bat=score_bat,
                 score_fld=score_fld,
-                game_date=game_date
+                game_date=game_date,
+                pitch_type=pitch_type,
+                pitch_speed=pitch_speed,
+                pitch_x=pitch_x,
+                pitch_z=pitch_z,
             )
 
             basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(similar_pitches, pitch_type, pitch_speed, pitch_x, pitch_z)
 
-            print(basic_outcome_data)
-            print(detailed_outcome_data)
-
-            raise NotImplementedError("Not implemented")
+            return {
+                "basic_outcome_data": basic_outcome_data,
+                "detailed_outcome_data": detailed_outcome_data,
+            }
         except HTTPException as e:
             raise e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def _get_similar_pitches(
+    async def _get_similar_pitches_for_pitcher(
         self,
         pitches: pd.DataFrame,
         batter_id: int,
-        pitcher_id: int,
         balls: int,
         strikes: int,
         score_bat: int,
         score_fld: int,
         game_date: str,
-        is_batter: bool = False,
         sample_pctg: float = 0.005,
     ) -> pd.DataFrame:
         """
-        Get the pitches most similar to the given context.
+        Get the pitches most similar to the given context for this pitcher.
         """
         try:
             # append "similarity score" column to pitches for each parameter
-            if is_batter:
-                # 'score_pitcher_name': 1 if pitcher_name is the same as the pitcher in the pitch, 0 otherwise
-                pitches["score_pitcher_name"] = pitches["pitcher"].apply(lambda x: 1 if x == pitcher_id else 0)
-            else:
-                # 'score_batter_name': 1 if batter_name is the same as the batter in the pitch, 0 otherwise
-                pitches["score_batter_name"] = pitches["pitcher"].apply(lambda x: 1 if x == pitcher_id else 0)
+            # 'score_batter_name': 1 if batter_name is the same as the batter in the pitch, 0 otherwise
+            pitches["score_batter_name"] = pitches["batter"].apply(lambda x: 1 if x == batter_id else 0)
             # 'score_balls': 1 if balls is the same as the balls in the pitch, 0 otherwise
             pitches["score_balls"] = pitches["balls"].apply(lambda x: 1 if x == balls else 0)
             # 'score_strikes': 1 if strikes is the same as the strikes in the pitch, 0 otherwise
@@ -148,7 +153,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # create a single similarity score: a weighted average of the individual similarity scores above
             pitches["similarity_score"] = (
-                (pitches["score_batter_name"] if not is_batter else pitches["score_pitcher_name"]) * 0.35 +
+                pitches["score_batter_name"] * 0.35 +
                 pitches["score_balls"] * 0.2 +
                 pitches["score_strikes"] * 0.2 +
                 pitches["score_score_bat"] * 0.1 +
@@ -162,6 +167,71 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             return pitches
 
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def _get_similar_pitches_for_batter(
+        self,
+        pitches: pd.DataFrame,
+        pitcher_id: int,
+        balls: int,
+        strikes: int,
+        score_bat: int,
+        score_fld: int,
+        game_date: str,
+        pitch_type: str,
+        pitch_speed: float,
+        pitch_x: float,
+        pitch_z: float,
+        sample_pctg: float = 0.005,
+    ) -> pd.DataFrame:
+        """
+        Get the pitches most similar to the given context for this batter.
+        """
+        try:
+            # append "similarity score" column to pitches for each parameter
+            # 'score_pitcher_name': 1 if pitcher_name is the same as the pitcher in the pitch, 0 otherwise
+            pitches["score_pitcher_name"] = pitches["pitcher"].apply(lambda x: 1 if x == pitcher_id else 0)
+            # 'score_balls': 1 if balls is the same as the balls in the pitch, 0 otherwise
+            pitches["score_balls"] = pitches["balls"].apply(lambda x: 1 if x == balls else 0)
+            # 'score_strikes': 1 if strikes is the same as the strikes in the pitch, 0 otherwise
+            pitches["score_strikes"] = pitches["strikes"].apply(lambda x: 1 if x == strikes else 0)
+            # 'score_score_bat': 1 if score_bat is the same as the score_bat in the pitch, 0 otherwise
+            pitches["score_score_bat"] = pitches["bat_score"].apply(lambda x: 1 if x == score_bat else 0)
+            # 'score_score_fld': 1 if score_fld is the same as the score_fld in the pitch, 0 otherwise
+            pitches["score_score_fld"] = pitches["fld_score"].apply(lambda x: 1 if x == score_fld else 0)
+            # 'score_game_date': 1 if game_date is the same as the game_date in the pitch, 0 otherwise
+            pitches["score_game_date"] = pitches["game_date"].apply(lambda x: 1 if x == game_date else 0)
+            # 'score_pitch_type': 1 if pitch_type is the same as the pitch_type in the pitch, 0 otherwise
+            pitches["score_pitch_type"] = pitches["pitch_type"].apply(lambda x: 1 if x == pitch_type else 0)
+            # 'score_pitch_speed': 1 if pitch_speed is the same as the pitch_speed in the pitch, 0 otherwise
+            pitches["score_pitch_speed"] = pitches["release_speed"].apply(lambda x: 1 if x == pitch_speed else 0)
+            # 'score_pitch_x': 1 if pitch_x is the same as the pitch_x in the pitch, 0 otherwise
+            pitches["score_pitch_x"] = pitches["plate_x"].apply(lambda x: 1 if x == pitch_x else 0)
+            # 'score_pitch_z': 1 if pitch_z is the same as the pitch_z in the pitch, 0 otherwise
+            pitches["score_pitch_z"] = pitches["plate_z"].apply(lambda x: 1 if x == pitch_z else 0)
+
+            # create a single similarity score: a weighted average of the individual similarity scores above
+            pitches["similarity_score"] = (
+                pitches["score_pitcher_name"] * 0.25 +
+                pitches["score_balls"] * 0.15 +
+                pitches["score_strikes"] * 0.15 +
+                pitches["score_score_bat"] * 0.05 +
+                pitches["score_score_fld"] * 0.05 +
+                pitches["score_game_date"] * 0.1 +
+                pitches["score_pitch_type"] * 0.05 +
+                pitches["score_pitch_speed"] * 0.05 +
+                pitches["score_pitch_x"] * 0.05 +
+                pitches["score_pitch_z"] * 0.05
+            )
+
+            # sort pitches by similarity score and return the top N pitches
+            pitches = pitches.sort_values(by="similarity_score", ascending=False)
+            pitches = pitches.head(int(len(pitches) * sample_pctg))
+
+            return pitches
         except HTTPException as e:
             raise e
         except Exception as e:
@@ -366,19 +436,116 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         try:
             outcome_value_counts = pitches["type"].value_counts()
             outcome_probs = outcome_value_counts / outcome_value_counts.sum()
-            
-            new_column_names = {
+
+            swing_events = pitches.loc[pitches["bat_speed"].notna()]
+            swing_event_value_counts = swing_events["type"].value_counts()
+            swing_event_probs = swing_event_value_counts / swing_event_value_counts.sum()
+            swing_probability = swing_event_value_counts.sum() / pitches.shape[0]
+
+            swing_speed_mean = swing_events["bat_speed"].mean()
+            swing_speed_std = swing_events["bat_speed"].std()
+            swing_speed_p05 = swing_events["bat_speed"].quantile(0.05)
+            swing_speed_p25 = swing_events["bat_speed"].quantile(0.25)
+            swing_speed_p50 = swing_events["bat_speed"].quantile(0.50)
+            swing_speed_p75 = swing_events["bat_speed"].quantile(0.75)
+            swing_speed_p95 = swing_events["bat_speed"].quantile(0.95)
+            swing_length_mean = swing_events["swing_length"].mean()
+            swing_length_std = swing_events["swing_length"].std()
+            swing_length_p05 = swing_events["swing_length"].quantile(0.05)
+            swing_length_p25 = swing_events["swing_length"].quantile(0.25)
+            swing_length_p50 = swing_events["swing_length"].quantile(0.50)
+            swing_length_p75 = swing_events["swing_length"].quantile(0.75)
+            swing_length_p95 = swing_events["swing_length"].quantile(0.95)
+
+            contact_events = pitches.loc[pitches["type"] == "X"]
+            contact_event_value_counts = contact_events["events"].value_counts()
+            contact_event_probs = contact_event_value_counts / contact_event_value_counts.sum()
+            contact_probability = contact_event_value_counts.sum() / pitches.shape[0]
+
+            contact_bb_type_value_counts = contact_events["bb_type"].value_counts()
+            contact_bb_type_probs = contact_bb_type_value_counts / contact_bb_type_value_counts.sum()
+            contact_hits = contact_events.loc[(contact_events["events"] == "single") | (contact_events["events"] == "double") | (contact_events["events"] == "triple") | (contact_events["events"] == "home_run")]
+            contact_ba = contact_hits.shape[0] / contact_events.shape[0]
+            contact_bases = contact_events["events"].apply(lambda x: 1 if x == "single" else 2 if x == "double" else 3 if x == "triple" else 4 if x == "home_run" else 0)
+            contact_slg = contact_bases.sum() / contact_events.shape[0]
+            contact_woba = contact_hits.shape[0] / contact_events.shape[0]
+            contact_exit_velocity_mean = contact_events["launch_speed"].mean()
+            contact_exit_velocity_std = contact_events["launch_speed"].std()
+            contact_exit_velocity_p05 = contact_events["launch_speed"].quantile(0.05)
+            contact_exit_velocity_p25 = contact_events["launch_speed"].quantile(0.25)
+            contact_exit_velocity_p50 = contact_events["launch_speed"].quantile(0.50)
+            contact_exit_velocity_p75 = contact_events["launch_speed"].quantile(0.75)
+            contact_exit_velocity_p95 = contact_events["launch_speed"].quantile(0.95)
+            contact_launch_angle_mean = contact_events["launch_angle"].mean()
+            contact_launch_angle_std = contact_events["launch_angle"].std()
+            contact_launch_angle_p05 = contact_events["launch_angle"].quantile(0.05)
+            contact_launch_angle_p25 = contact_events["launch_angle"].quantile(0.25)
+            contact_launch_angle_p50 = contact_events["launch_angle"].quantile(0.50)
+            contact_launch_angle_p75 = contact_events["launch_angle"].quantile(0.75)
+            contact_launch_angle_p95 = contact_events["launch_angle"].quantile(0.95)
+            contact_xba = contact_events["estimated_ba_using_speedangle"].mean()
+            contact_xslg = contact_events["estimated_slg_using_speedangle"].mean()
+            contact_xwoba = contact_events["estimated_woba_using_speedangle"].mean()
+
+            new_column_names_outcome = {
                 "S": "strike",
                 "B": "ball",
                 "X": "contact",
             }
 
+            new_column_names_swing = {
+                "S": "swinging_strike",
+                "X": "contact",
+            }
+
             basic = {
-                "outcome_probs": outcome_probs.rename(index=new_column_names).to_dict(),
+                "outcome_probs": outcome_probs.rename(index=new_column_names_outcome).to_dict(),
+                "swing_probability": swing_probability,
+                "swing_event_probs": swing_event_probs.rename(index=new_column_names_swing).to_dict(),
+                "contact_probability": contact_probability,
+                "contact_event_probs": contact_event_probs.to_dict(),
             }
 
             detailed = {
-                "TODO": "TODO",
+                "swing_data": {
+                    "bat_speed_mean": swing_speed_mean,
+                    "bat_speed_std": swing_speed_std,
+                    "bat_speed_p05": swing_speed_p05,
+                    "bat_speed_p25": swing_speed_p25,
+                    "bat_speed_p50": swing_speed_p50,
+                    "bat_speed_p75": swing_speed_p75,
+                    "bat_speed_p95": swing_speed_p95,
+                    "swing_length_mean": swing_length_mean,
+                    "swing_length_std": swing_length_std,
+                    "swing_length_p05": swing_length_p05,
+                    "swing_length_p25": swing_length_p25,
+                    "swing_length_p50": swing_length_p50,
+                    "swing_length_p75": swing_length_p75,
+                    "swing_length_p95": swing_length_p95,
+                },
+                "contact_data": {
+                    "bb_type_probs": contact_bb_type_probs.to_dict(),
+                    "BA": contact_ba,
+                    "SLG": contact_slg,
+                    "wOBA": contact_woba,
+                    "exit_velocity_mean": contact_exit_velocity_mean,
+                    "exit_velocity_std": contact_exit_velocity_std,
+                    "exit_velocity_p05": contact_exit_velocity_p05,
+                    "exit_velocity_p25": contact_exit_velocity_p25,
+                    "exit_velocity_p50": contact_exit_velocity_p50,
+                    "exit_velocity_p75": contact_exit_velocity_p75,
+                    "exit_velocity_p95": contact_exit_velocity_p95,
+                    "launch_angle_mean": contact_launch_angle_mean,
+                    "launch_angle_std": contact_launch_angle_std,
+                    "launch_angle_p05": contact_launch_angle_p05,
+                    "launch_angle_p25": contact_launch_angle_p25,
+                    "launch_angle_p50": contact_launch_angle_p50,
+                    "launch_angle_p75": contact_launch_angle_p75,
+                    "launch_angle_p95": contact_launch_angle_p95,
+                    "xBA": contact_xba,
+                    "xSLG": contact_xslg,
+                    "xwOBA": contact_xwoba,
+                }
             }
 
             return basic, detailed

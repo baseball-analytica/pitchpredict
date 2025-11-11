@@ -3,6 +3,8 @@
 
 from typing import Any
 
+from pitchpredict.backend.algs.base import PitchPredictAlgorithm
+from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
 from pitchpredict.backend.caching import PitchPredictCache
 from pitchpredict.backend.logging import init_logger
 
@@ -21,7 +23,7 @@ class PitchPredict:
         log_level_console: str = "INFO",
         log_level_file: str = "INFO",
         fuzzy_player_lookup: bool = True,
-        algorithms: list[str] = ["similarity", "deep"]
+        algorithms: dict[str, PitchPredictAlgorithm] | None = None,
     ) -> None:
         self.enable_cache = enable_cache
         self.cache_dir = cache_dir
@@ -30,6 +32,10 @@ class PitchPredict:
         self.log_level_console = log_level_console
         self.log_level_file = log_level_file
         self.fuzzy_player_lookup = fuzzy_player_lookup
+        if algorithms is None:
+            algorithms = {
+                "similarity": SimilarityAlgorithm(),
+            }
         self.algorithms = algorithms
 
     def __post_init__(self) -> None:
@@ -70,7 +76,18 @@ class PitchPredict:
         """
         Given a context, predict the pitcher's next pitch and its outcome.
         """
-        raise NotImplementedError("Not implemented")
+        alg = self.algorithms.get(algorithm)
+        if alg is None:
+            raise ValueError(f"unrecognized algorithm: {algorithm}")
+        return await alg.predict_pitcher(
+            pitcher_name=pitcher_name,
+            batter_name=batter_name,
+            balls=balls,
+            strikes=strikes,
+            score_bat=score_bat,
+            score_fld=score_fld,
+            game_date=game_date,
+        )
 
     async def predict_batter(
         self,
@@ -90,4 +107,19 @@ class PitchPredict:
         """
         Given a context, predict the batter's next outcome.
         """
-        raise NotImplementedError("Not implemented")
+        alg = self.algorithms.get(algorithm)
+        if alg is None:
+            raise ValueError(f"unrecognized algorithm: {algorithm}")
+        return await alg.predict_batter(
+            batter_name=batter_name,
+            pitcher_name=pitcher_name,
+            balls=balls,
+            strikes=strikes,
+            score_bat=score_bat,
+            score_fld=score_fld,
+            game_date=game_date,
+            pitch_type=pitch_type,
+            pitch_speed=pitch_speed,
+            pitch_x=pitch_x,
+            pitch_y=pitch_y,
+        )
