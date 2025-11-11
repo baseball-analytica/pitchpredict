@@ -53,3 +53,30 @@ class PitchPredictAlgorithm:
         Predict the batter's next outcome.
         """
         pass
+
+    @abstractmethod
+    def get_metadata(self) -> dict[str, Any]:
+        """
+        Get the metadata for the algorithm, including usage information.
+        """
+        pass
+
+    @abstractmethod
+    def get_pitcher_prediction_metadata(
+        self,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Get the metadata for the pitcher prediction, including usage information.
+        """
+        pass
+
+    @abstractmethod
+    def get_batter_prediction_metadata(
+        self,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Get the metadata for the batter prediction, including usage information.
+        """
+        pass

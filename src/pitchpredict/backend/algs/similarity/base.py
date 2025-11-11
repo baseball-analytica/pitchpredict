@@ -2,6 +2,7 @@
 # Copyright (c) 2025 Addison Kline
 
 from collections import defaultdict
+from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -19,9 +20,11 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     def __init__(
         self,
         name: str = "similarity",
+        sample_pctg: float = 0.05,
         **kwargs: Any,
     ) -> None:
         super().__init__(name, **kwargs)
+        self.sample_pctg = sample_pctg
 
     async def predict_pitcher(
         self,
@@ -37,6 +40,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         Predict the pitcher's next pitch and its outcome.
         """
         try:
+            start_time = datetime.now()
+
             pitcher_id = await get_player_id_from_name(pitcher_name)
             batter_id = await get_player_id_from_name(batter_name)
 
@@ -62,11 +67,20 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 pitch_z=basic_pitch_data["pitch_z_mean"],
             )
 
+            prediction_metadata = self.get_pitcher_prediction_metadata(
+                start_time=start_time,
+                end_time=datetime.now(),
+                n_pitches_total=len(pitches),
+                n_pitches_sampled=len(similar_pitches),
+            )
+
             return {
+                "algorithm_metadata": self.get_metadata(),
                 "basic_pitch_data": basic_pitch_data,
                 "detailed_pitch_data": detailed_pitch_data,
                 "basic_outcome_data": basic_outcome_data,
                 "detailed_outcome_data": detailed_outcome_data,
+                "prediction_metadata": prediction_metadata,
             }
 
         except HTTPException as e:
@@ -92,6 +106,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         Predict the batter's next outcome.
         """
         try:
+            start_time = datetime.now()
+            
             pitcher_id = await get_player_id_from_name(pitcher_name)
             batter_id = await get_player_id_from_name(batter_name)
 
@@ -113,9 +129,19 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(similar_pitches, pitch_type, pitch_speed, pitch_x, pitch_z)
 
+            
+            prediction_metadata = self.get_batter_prediction_metadata(
+                start_time=start_time,
+                end_time=datetime.now(),
+                n_pitches_total=len(pitches),
+                n_pitches_sampled=len(similar_pitches),
+            )
+
             return {
+                "algorithm_metadata": self.get_metadata(),
                 "basic_outcome_data": basic_outcome_data,
                 "detailed_outcome_data": detailed_outcome_data,
+                "prediction_metadata": prediction_metadata,
             }
         except HTTPException as e:
             raise e
@@ -131,7 +157,6 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         score_bat: int,
         score_fld: int,
         game_date: str,
-        sample_pctg: float = 0.005,
     ) -> pd.DataFrame:
         """
         Get the pitches most similar to the given context for this pitcher.
@@ -163,7 +188,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # sort pitches by similarity score and return the top N pitches
             pitches = pitches.sort_values(by="similarity_score", ascending=False)
-            pitches = pitches.head(int(len(pitches) * sample_pctg))
+            pitches = pitches.head(int(len(pitches) * self.sample_pctg))
 
             return pitches
 
@@ -185,7 +210,6 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         pitch_speed: float,
         pitch_x: float,
         pitch_z: float,
-        sample_pctg: float = 0.005,
     ) -> pd.DataFrame:
         """
         Get the pitches most similar to the given context for this batter.
@@ -229,7 +253,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # sort pitches by similarity score and return the top N pitches
             pitches = pitches.sort_values(by="similarity_score", ascending=False)
-            pitches = pitches.head(int(len(pitches) * sample_pctg))
+            pitches = pitches.head(int(len(pitches) * self.sample_pctg))
 
             return pitches
         except HTTPException as e:
@@ -549,6 +573,100 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             }
 
             return basic, detailed
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def get_metadata(self) -> dict[str, Any]:
+        """
+        Get the metadata for the algorithm, including usage information.
+        """
+        return {
+            "algorithm_name": "similarity",
+            "instance_name": self.name,
+            "sample_pctg": self.sample_pctg,
+        }
+
+    def get_pitcher_prediction_metadata(
+        self,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Get the metadata for the pitcher prediction, including usage information.
+        """
+        try:
+            start_time = kwargs.get("start_time")
+            if start_time is None:
+                raise ValueError("start_time is required")
+            if not isinstance(start_time, datetime):
+                raise ValueError("start_time must be a datetime object")
+            end_time = kwargs.get("end_time")
+            if end_time is None:
+                raise ValueError("end_time is required")
+            if not isinstance(end_time, datetime):
+                raise ValueError("end_time must be a datetime object")
+            n_pitches_total = kwargs.get("n_pitches_total")
+            if n_pitches_total is None:
+                raise ValueError("n_pitches_total is required")
+            if not isinstance(n_pitches_total, int):
+                raise ValueError("n_pitches_total must be an integer")
+            n_pitches_sampled = kwargs.get("n_pitches_sampled")
+            if n_pitches_sampled is None:
+                raise ValueError("n_pitches_sampled is required")
+            if not isinstance(n_pitches_sampled, int):
+                raise ValueError("n_pitches_sampled must be an integer")
+
+            return {
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration": (end_time - start_time).total_seconds(),
+                "n_pitches_total": n_pitches_total,
+                "n_pitches_sampled": n_pitches_sampled,
+                "sample_pctg": self.sample_pctg,
+            }
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def get_batter_prediction_metadata(
+        self,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Get the metadata for the batter prediction, including usage information.
+        """
+        try:
+            start_time = kwargs.get("start_time")
+            if start_time is None:
+                raise ValueError("start_time is required")
+            if not isinstance(start_time, datetime):
+                raise ValueError("start_time must be a datetime object")
+            end_time = kwargs.get("end_time")
+            if end_time is None:
+                raise ValueError("end_time is required")
+            if not isinstance(end_time, datetime):
+                raise ValueError("end_time must be a datetime object")
+            n_pitches_total = kwargs.get("n_pitches_total")
+            if n_pitches_total is None:
+                raise ValueError("n_pitches_total is required")
+            if not isinstance(n_pitches_total, int):
+                raise ValueError("n_pitches_total must be an integer")
+            n_pitches_sampled = kwargs.get("n_pitches_sampled")
+            if n_pitches_sampled is None:
+                raise ValueError("n_pitches_sampled is required")
+            if not isinstance(n_pitches_sampled, int):
+                raise ValueError("n_pitches_sampled must be an integer")
+
+            return {
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration": (end_time - start_time).total_seconds(),
+                "n_pitches_total": n_pitches_total,
+                "n_pitches_sampled": n_pitches_sampled,
+                "sample_pctg": self.sample_pctg,
+            }
         except HTTPException as e:
             raise e
         except Exception as e:

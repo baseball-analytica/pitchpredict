@@ -21,7 +21,7 @@ class PredictPitcherResponse(BaseModel):
     detailed_pitch_data: dict[str, Any]
     basic_outcome_data: dict[str, Any]
     detailed_outcome_data: dict[str, Any]
-
+    prediction_metadata: dict[str, Any]
 
 class PredictBatterRequest(BaseModel):
     batter_name: str
@@ -41,4 +41,5 @@ class PredictBatterRequest(BaseModel):
 class PredictBatterResponse(BaseModel):
     basic_outcome_data: dict[str, Any]
     detailed_outcome_data: dict[str, Any]
+    prediction_metadata: dict[str, Any]
 

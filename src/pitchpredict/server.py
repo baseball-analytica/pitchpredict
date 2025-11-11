@@ -72,6 +72,7 @@ async def predict_pitcher_endpoint(request: server_types.PredictPitcherRequest) 
             detailed_pitch_data=result["detailed_pitch_data"],
             basic_outcome_data=result["basic_outcome_data"],
             detailed_outcome_data=result["detailed_outcome_data"],
+            prediction_metadata=result["prediction_metadata"],
         )
     except HTTPException as e:
         raise e
@@ -103,6 +104,7 @@ async def predict_batter_endpoint(request: server_types.PredictBatterRequest) ->
         return server_types.PredictBatterResponse(
             basic_outcome_data=result["basic_outcome_data"],
             detailed_outcome_data=result["detailed_outcome_data"],
+            prediction_metadata=result["prediction_metadata"],
         )
     except HTTPException as e:
         raise e
