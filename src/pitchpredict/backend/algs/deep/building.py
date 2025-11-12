@@ -9,6 +9,7 @@ import torch
 from pitchpredict.backend.fetching import get_all_pitches
 from pitchpredict.types.deep import PitchToken, PitchContext
 
+
 async def build_deep_model(
     date_start: str,
     date_end: str,
@@ -22,8 +23,8 @@ async def build_deep_model(
     pitch_tokens, pitch_contexts = await _build_pitch_tokens_and_contexts(pitches)
 
     print(f"built {len(pitch_tokens)} pitch tokens and {len(pitch_contexts)} pitch contexts")
-    print(pitch_tokens[0])
-    print(pitch_contexts[0])
+    print(pitch_tokens[0].to_tensor())
+    print(pitch_contexts[0].to_tensor())
 
     raise NotImplementedError("Not implemented")
 
