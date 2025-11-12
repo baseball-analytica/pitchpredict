@@ -60,11 +60,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             basic_pitch_data, detailed_pitch_data = await self._digest_pitch_data(similar_pitches)
 
             basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(
-                pitches=similar_pitches,
-                pitch_type=list(basic_pitch_data["pitch_type_probs"].keys())[0],
-                pitch_speed=basic_pitch_data["pitch_speed_mean"],
-                pitch_x=basic_pitch_data["pitch_x_mean"],
-                pitch_z=basic_pitch_data["pitch_z_mean"],
+                pitches=similar_pitches
             )
 
             prediction_metadata = self.get_pitcher_prediction_metadata(
@@ -127,7 +123,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 pitch_z=pitch_z,
             )
 
-            basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(similar_pitches, pitch_type, pitch_speed, pitch_x, pitch_z)
+            basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(
+                pitches=similar_pitches,
+            )
 
             
             prediction_metadata = self.get_batter_prediction_metadata(
@@ -449,10 +447,6 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     async def _digest_outcome_data(
         self,
         pitches: pd.DataFrame,
-        pitch_type: str,
-        pitch_speed: float,
-        pitch_x: float,
-        pitch_z: float,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """
         Create a final summary of the outcome data.

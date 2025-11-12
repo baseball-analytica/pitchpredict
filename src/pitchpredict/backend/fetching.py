@@ -107,3 +107,26 @@ def _parse_player_name(name: str) -> tuple[str, str]:
         raise HTTPException(status_code=400, detail="player name must be in the format 'First Last'")
 
     return name_split[1], name_split[0]
+
+
+async def get_all_pitches(
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """
+    Get all pitches thrown between `start_date` and `end_date`.
+    """
+    try:
+        pitches = pybaseball.statcast(
+            start_dt=start_date,
+            end_dt=end_date,
+        )
+
+        if pitches.empty:
+            raise HTTPException(status_code=404, detail=f"no pitches found between {start_date} and {end_date}")
+
+        return pitches
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
