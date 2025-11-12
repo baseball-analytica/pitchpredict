@@ -21,22 +21,22 @@ class PitchToken(BaseModel):
         """
         Convert the pitch token to a tensor.
         """
-        is_CH = 1 if self.type == "CH" else 0
-        is_CU = 1 if self.type == "CU" else 0
-        is_FC = 1 if self.type == "FC" else 0
-        is_EP = 1 if self.type == "EP" else 0
-        is_FO = 1 if self.type == "FO" else 0
-        is_FF = 1 if self.type == "FF" else 0
-        is_KN = 1 if self.type == "KN" else 0
-        is_KC = 1 if self.type == "KC" else 0
-        is_SC = 1 if self.type == "SC" else 0
-        is_SI = 1 if self.type == "SI" else 0
-        is_SL = 1 if self.type == "SL" else 0
-        is_SV = 1 if self.type == "SV" else 0
-        is_FS = 1 if self.type == "FS" else 0
-        is_ST = 1 if self.type == "ST" else 0
+        is_CH = 1 if self.type == "CH" else -1
+        is_CU = 1 if self.type == "CU" else -1
+        is_FC = 1 if self.type == "FC" else -1
+        is_EP = 1 if self.type == "EP" else -1
+        is_FO = 1 if self.type == "FO" else -1
+        is_FF = 1 if self.type == "FF" else -1
+        is_KN = 1 if self.type == "KN" else -1
+        is_KC = 1 if self.type == "KC" else -1
+        is_SC = 1 if self.type == "SC" else -1
+        is_SI = 1 if self.type == "SI" else -1
+        is_SL = 1 if self.type == "SL" else -1
+        is_SV = 1 if self.type == "SV" else -1
+        is_FS = 1 if self.type == "FS" else -1
+        is_ST = 1 if self.type == "ST" else -1
 
-        event_is_none = 1 if self.event == "" else 0
+        event_is_none = 1 if self.event == "" else -1
 
         tensor = torch.tensor([
             is_CH,
@@ -86,8 +86,8 @@ class PitchContext(BaseModel):
         """
         Convert the pitch context to a tensor.
         """
-        pitcher_is_lefty = 1 if self.pitcher_throws == "L" else 0
-        batter_is_lefty = 1 if self.batter_hits == "L" else 0
+        pitcher_is_lefty = 1 if self.pitcher_throws == "L" else -1
+        batter_is_lefty = 1 if self.batter_hits == "L" else -1
         game_year = int(self.game_date.split("-")[0])
 
         tensor = torch.tensor([

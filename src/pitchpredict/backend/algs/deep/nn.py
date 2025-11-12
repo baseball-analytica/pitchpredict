@@ -4,7 +4,7 @@
 import torch
 
 
-class PitchPredictDeepNN(torch.nn.RNN):
+class PitchPredictDeepNN(torch.nn.LSTM):
     """
     A deep neural network for pitch prediction.
     """
