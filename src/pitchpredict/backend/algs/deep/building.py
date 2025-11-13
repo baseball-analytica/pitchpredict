@@ -27,7 +27,7 @@ async def build_deep_model(
     batch_size: int = 32,
     learning_rate: float = 0.001,
     num_epochs: int = 10,
-    model_path: str = os.getcwd() + "/.pitchpredict_models/deep_pitch.pth",
+    model_path: str = "./.pitchpredict_models/deep_pitch.pth",
 ) -> DeepPitcherModel:
     """
     Build a new deep model from scratch using the given parameters.

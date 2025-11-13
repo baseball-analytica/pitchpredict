@@ -10,6 +10,7 @@ async def main():
         num_layers=2,
         bidirectional=False,
         num_epochs=100,
+        model_path="/raid/kline/pitchpredict/.pitchpredict_models/deep_pitch.pth",
     )
     print(model)
 

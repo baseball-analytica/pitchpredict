@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from fastapi import HTTPException
+import pybaseball # type: ignore
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
 from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
@@ -29,6 +30,8 @@ class PitchPredict:
         algorithms: dict[str, PitchPredictAlgorithm] | None = None,
     ) -> None:
         self.enable_cache = enable_cache
+        if self.enable_cache:
+            pybaseball.cache.enable()
         self.cache_dir = cache_dir
         self.enable_logging = enable_logging
         self.log_dir = log_dir
