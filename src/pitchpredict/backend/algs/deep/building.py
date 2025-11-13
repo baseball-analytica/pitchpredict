@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 
 from pitchpredict.backend.fetching import get_all_pitches
-from pitchpredict.types.deep import PitchToken, PitchContext
+from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 
 
 async def build_deep_model(
