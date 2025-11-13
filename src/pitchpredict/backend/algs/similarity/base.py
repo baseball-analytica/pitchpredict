@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
-from collections import defaultdict
 from datetime import datetime
+import logging
 from typing import Any
 
 from fastapi import HTTPException
@@ -25,6 +25,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     ) -> None:
         super().__init__(name, **kwargs)
         self.sample_pctg = sample_pctg
+        self.logger = logging.getLogger("pitchpredict.backend.algs.similarity")
 
     async def predict_pitcher(
         self,
@@ -39,13 +40,17 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         Predict the pitcher's next pitch and its outcome.
         """
+        self.logger.debug("predict_pitcher called")
+
         try:
             start_time = datetime.now()
+            self.logger.debug(f"start time: {start_time}")
 
             pitcher_id = await get_player_id_from_name(pitcher_name)
             batter_id = await get_player_id_from_name(batter_name)
 
             pitches = await get_pitches_from_pitcher(pitcher_id, game_date)
+            self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
 
             similar_pitches = await self._get_similar_pitches_for_pitcher(
                 pitches=pitches,
@@ -56,12 +61,15 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 score_fld=score_fld,
                 game_date=game_date
             )
+            self.logger.debug(f"successfully fetched {similar_pitches.shape[0]} similar pitches")
 
             basic_pitch_data, detailed_pitch_data = await self._digest_pitch_data(similar_pitches)
+            self.logger.debug("successfully digested pitch data")
 
             basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(
                 pitches=similar_pitches
             )
+            self.logger.debug("successfully digested outcome data")
 
             prediction_metadata = self.get_pitcher_prediction_metadata(
                 start_time=start_time,
@@ -69,6 +77,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 n_pitches_total=len(pitches),
                 n_pitches_sampled=len(similar_pitches),
             )
+
+            self.logger.info("predict_pitcher completed successfully")
 
             return {
                 "algorithm_metadata": self.get_metadata(),
@@ -80,8 +90,10 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             }
 
         except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
             raise e
         except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     async def predict_batter(
@@ -101,13 +113,17 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         Predict the batter's next outcome.
         """
+        self.logger.debug("predict_batter called")
+
         try:
             start_time = datetime.now()
-            
+            self.logger.debug(f"start time: {start_time}")
+
             pitcher_id = await get_player_id_from_name(pitcher_name)
             batter_id = await get_player_id_from_name(batter_name)
 
             pitches = await get_pitches_to_batter(batter_id, game_date)
+            self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
 
             similar_pitches = await self._get_similar_pitches_for_batter(
                 pitches=pitches,
@@ -122,11 +138,12 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 pitch_x=pitch_x,
                 pitch_z=pitch_z,
             )
+            self.logger.debug(f"successfully fetched {similar_pitches.shape[0]} similar pitches")
 
             basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(
                 pitches=similar_pitches,
             )
-
+            self.logger.debug("successfully digested outcome data")
             
             prediction_metadata = self.get_batter_prediction_metadata(
                 start_time=start_time,
@@ -135,6 +152,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 n_pitches_sampled=len(similar_pitches),
             )
 
+            self.logger.info("predict_batter completed successfully")
+
             return {
                 "algorithm_metadata": self.get_metadata(),
                 "basic_outcome_data": basic_outcome_data,
@@ -142,8 +161,10 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "prediction_metadata": prediction_metadata,
             }
         except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
             raise e
         except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     async def _get_similar_pitches_for_pitcher(
@@ -159,6 +180,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         Get the pitches most similar to the given context for this pitcher.
         """
+        self.logger.debug("get_similar_pitches_for_pitcher called")
+
         try:
             # append "similarity score" column to pitches for each parameter
             # 'score_batter_name': 1 if batter_name is the same as the batter in the pitch, 0 otherwise
@@ -188,11 +211,14 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             pitches = pitches.sort_values(by="similarity_score", ascending=False)
             pitches = pitches.head(int(len(pitches) * self.sample_pctg))
 
+            self.logger.info(f"successfully fetched {pitches.shape[0]} similar pitches")
             return pitches
 
         except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
             raise e
         except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     async def _get_similar_pitches_for_batter(
@@ -212,6 +238,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         Get the pitches most similar to the given context for this batter.
         """
+        self.logger.debug("get_similar_pitches_for_batter called")
+
         try:
             # append "similarity score" column to pitches for each parameter
             # 'score_pitcher_name': 1 if pitcher_name is the same as the pitcher in the pitch, 0 otherwise
@@ -253,10 +281,14 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             pitches = pitches.sort_values(by="similarity_score", ascending=False)
             pitches = pitches.head(int(len(pitches) * self.sample_pctg))
 
+            self.logger.info(f"successfully fetched {pitches.shape[0]} similar pitches")
             return pitches
+
         except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
             raise e
         except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     async def _digest_pitch_data(
@@ -272,6 +304,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         Returns:
             A tuple containing the basic pitch data and the detailed pitch data.
         """
+        self.logger.debug("digest_pitch_data called")
+
         try:
             pitch_type_value_counts = pitches["pitch_type"].value_counts()
             pitch_type_probs = pitch_type_value_counts / pitch_type_value_counts.sum()
@@ -438,10 +472,14 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 },
             }
 
+            self.logger.info("digest_pitch_data completed successfully")
             return basic, detailed
+
         except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
             raise e
         except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     async def _digest_outcome_data(
@@ -451,6 +489,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         Create a final summary of the outcome data.
         """
+        self.logger.debug("digest_outcome_data called")
+
         try:
             outcome_value_counts = pitches["type"].value_counts()
             outcome_probs = outcome_value_counts / outcome_value_counts.sum()
@@ -566,10 +606,13 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 }
             }
 
+            self.logger.info("digest_outcome_data completed successfully")
             return basic, detailed
         except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
             raise e
         except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     def get_metadata(self) -> dict[str, Any]:
@@ -589,6 +632,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         Get the metadata for the pitcher prediction, including usage information.
         """
+        self.logger.debug("get_pitcher_prediction_metadata called")
+
         try:
             start_time = kwargs.get("start_time")
             if start_time is None:
@@ -611,6 +656,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             if not isinstance(n_pitches_sampled, int):
                 raise ValueError("n_pitches_sampled must be an integer")
 
+            self.logger.info("get_pitcher_prediction_metadata completed successfully")
             return {
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
@@ -620,8 +666,10 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "sample_pctg": self.sample_pctg,
             }
         except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
             raise e
         except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     def get_batter_prediction_metadata(
@@ -631,6 +679,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         """
         Get the metadata for the batter prediction, including usage information.
         """
+        self.logger.debug("get_batter_prediction_metadata called")
+
         try:
             start_time = kwargs.get("start_time")
             if start_time is None:
@@ -653,6 +703,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             if not isinstance(n_pitches_sampled, int):
                 raise ValueError("n_pitches_sampled must be an integer")
 
+            self.logger.info("get_batter_prediction_metadata completed successfully")
             return {
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
@@ -662,6 +713,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "sample_pctg": self.sample_pctg,
             }
         except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
             raise e
         except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
             raise HTTPException(status_code=500, detail=str(e))

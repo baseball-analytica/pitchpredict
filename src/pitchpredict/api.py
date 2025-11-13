@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
+import logging
 from typing import Any
+
+from fastapi import HTTPException
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
 from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
@@ -37,15 +40,12 @@ class PitchPredict:
                 "similarity": SimilarityAlgorithm(),
             }
         self.algorithms = algorithms
+        self.__post_init__()
 
     def __post_init__(self) -> None:
         """
         Perform post-initialization tasks, including validation.
         """
-        # check cache stuff
-        if self.enable_cache:
-            self.cache = PitchPredictCache(cache_dir=self.cache_dir)
-        
         # check logging stuff
         if self.enable_logging:
             init_logger(
@@ -53,14 +53,25 @@ class PitchPredict:
                 log_level_console=self.log_level_console,
                 log_level_file=self.log_level_file,
             )
+            self.logger = logging.getLogger("pitchpredict")
+            self.logger.info("logging initialized")
+
+        # check cache stuff
+        if self.enable_cache:
+            self.cache = PitchPredictCache(cache_dir=self.cache_dir)
+            self.logger.info("cache initialized")
         
         # check algorithms
         VALID_ALGORITHMS = ["similarity", "deep"]
         if self.algorithms == []:
+            self.logger.error("algorithms is an empty list")
             raise ValueError("at least one algorithm must be specified")
         for algorithm in self.algorithms:
             if algorithm not in VALID_ALGORITHMS:
+                self.logger.error(f"unrecognized algorithm: {algorithm}")
                 raise ValueError(f"unrecognized algorithm: {algorithm}")
+
+        self.logger.debug("post-initialization tasks completed")
 
     async def predict_pitcher(
         self,
@@ -76,18 +87,32 @@ class PitchPredict:
         """
         Given a context, predict the pitcher's next pitch and its outcome.
         """
+        self.logger.debug("predict_pitcher called")
+
         alg = self.algorithms.get(algorithm)
         if alg is None:
-            raise ValueError(f"unrecognized algorithm: {algorithm}")
-        return await alg.predict_pitcher(
-            pitcher_name=pitcher_name,
-            batter_name=batter_name,
-            balls=balls,
-            strikes=strikes,
-            score_bat=score_bat,
-            score_fld=score_fld,
-            game_date=game_date,
-        )
+            self.logger.error(f"unrecognized algorithm: {algorithm}")
+            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {algorithm}")
+        self.logger.debug(f"using algorithm: {algorithm}")
+
+        try:
+            result = await alg.predict_pitcher(
+                pitcher_name=pitcher_name,
+                batter_name=batter_name,
+                balls=balls,
+                strikes=strikes,
+                score_bat=score_bat,
+                score_fld=score_fld,
+                game_date=game_date,
+            )
+            self.logger.debug("predict_pitcher completed")
+            return result
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
     async def predict_batter(
         self,
@@ -107,19 +132,33 @@ class PitchPredict:
         """
         Given a context, predict the batter's next outcome.
         """
+        self.logger.debug("predict_batter called")
+
         alg = self.algorithms.get(algorithm)
         if alg is None:
-            raise ValueError(f"unrecognized algorithm: {algorithm}")
-        return await alg.predict_batter(
-            batter_name=batter_name,
-            pitcher_name=pitcher_name,
-            balls=balls,
-            strikes=strikes,
-            score_bat=score_bat,
-            score_fld=score_fld,
-            game_date=game_date,
-            pitch_type=pitch_type,
-            pitch_speed=pitch_speed,
-            pitch_x=pitch_x,
-            pitch_y=pitch_y,
-        )
+            self.logger.error(f"unrecognized algorithm: {algorithm}")
+            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {algorithm}")
+        self.logger.debug(f"using algorithm: {algorithm}")
+
+        try:
+            result = await alg.predict_batter(
+                batter_name=batter_name,
+                pitcher_name=pitcher_name,
+                balls=balls,
+                strikes=strikes,
+                score_bat=score_bat,
+                score_fld=score_fld,
+                game_date=game_date,
+                pitch_type=pitch_type,
+                pitch_speed=pitch_speed,
+                pitch_x=pitch_x,
+                pitch_y=pitch_y,
+            )
+            self.logger.debug("predict_batter completed")
+            return result
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))

@@ -2,10 +2,13 @@
 # Copyright (c) 2025 Addison Kline
 
 from datetime import datetime
+import logging
 
 from fastapi import HTTPException
 import pandas as pd
 import pybaseball # type: ignore
+
+logger = logging.getLogger("pitchpredict.backend.fetching")
 
 
 async def get_pitches_from_pitcher(
@@ -25,10 +28,14 @@ async def get_pitches_from_pitcher(
     Returns:
         A pandas DataFrame containing the pitches thrown by the pitcher.
     """
+    logger.debug("get_pitches_from_pitcher called")
+
     if end_date is None:
+        logger.debug("end_date is None, using current date")
         end_date = datetime.now().strftime("%Y-%m-%d")
 
     try:
+        logger.debug("fetching pitches from pitcher")
         pitches = pybaseball.statcast_pitcher(
             start_dt=start_date,
             end_dt=end_date,
@@ -36,12 +43,16 @@ async def get_pitches_from_pitcher(
         )
 
         if pitches.empty:
+            logger.error(f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}")
             raise HTTPException(status_code=404, detail=f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}")
 
+        logger.debug("pitches fetched successfully")
         return pitches
     except HTTPException as e:
+        logger.error(f"encountered HTTPException: {e}")
         raise e
     except Exception as e:
+        logger.error(f"encountered Exception: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -53,10 +64,14 @@ async def get_pitches_to_batter(
     """
     Given a batter's MLBAM ID, get a list of all the pitches thrown to them between `start_date` and `end_date`.
     """
+    logger.debug("get_pitches_to_batter called")
+
     if end_date is None:
+        logger.debug("end_date is None, using current date")
         end_date = datetime.now().strftime("%Y-%m-%d")
 
     try:
+        logger.debug("fetching pitches to batter")
         pitches = pybaseball.statcast_batter(
             start_dt=start_date,
             end_dt=end_date,
@@ -64,12 +79,16 @@ async def get_pitches_to_batter(
         )
 
         if pitches.empty:
+            logger.error(f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}")
             raise HTTPException(status_code=404, detail=f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}")
 
+        logger.debug("pitches fetched successfully")
         return pitches
     except HTTPException as e:
+        logger.error(f"encountered HTTPException: {e}")
         raise e
     except Exception as e:
+        logger.error(f"encountered Exception: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -80,8 +99,11 @@ async def get_player_id_from_name(
     """
     Given a player's name, get their MLBAM ID.
     """
+    logger.debug("get_player_id_from_name called")
+
     try:
         last_name, first_name = _parse_player_name(player_name)
+        logger.debug(f"parsed player name: {last_name}, {first_name}")
         player_ids = pybaseball.playerid_lookup(
             last_name,
             first_name,
@@ -89,12 +111,16 @@ async def get_player_id_from_name(
         )
 
         if player_ids.empty:
+            logger.error(f"no player found with name {player_name}")
             raise HTTPException(status_code=404, detail=f"no player found with name {player_name}")
 
+        logger.info(f"player ID fetched successfully for {player_name}: {player_ids.iloc[0]['key_mlbam']}")
         return player_ids.iloc[0]["key_mlbam"]
     except HTTPException as e:
+        logger.error(f"encountered HTTPException: {e}")
         raise e
     except Exception as e:
+        logger.error(f"encountered Exception: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -102,10 +128,14 @@ def _parse_player_name(name: str) -> tuple[str, str]:
     """
     Parse the given player's name: "First Last" -> ("Last", "First").
     """
+    logger.debug("parse_player_name called")
+
     name_split = name.split(" ")
     if len(name_split) != 2:
+        logger.error(f"player name must be in the format 'First Last': {name}")
         raise HTTPException(status_code=400, detail="player name must be in the format 'First Last'")
 
+    logger.debug(f"parsed player name: {name_split[1]}, {name_split[0]}")
     return name_split[1], name_split[0]
 
 
@@ -116,17 +146,24 @@ async def get_all_pitches(
     """
     Get all pitches thrown between `start_date` and `end_date`.
     """
+    logger.debug("get_all_pitches called")
+
     try:
+        logger.debug("fetching all pitches")
         pitches = pybaseball.statcast(
             start_dt=start_date,
             end_dt=end_date,
         )
 
         if pitches.empty:
+            logger.error(f"no pitches found between {start_date} and {end_date}")
             raise HTTPException(status_code=404, detail=f"no pitches found between {start_date} and {end_date}")
 
+        logger.debug("pitches fetched successfully")
         return pitches
     except HTTPException as e:
+        logger.error(f"encountered HTTPException: {e}")
         raise e
     except Exception as e:
+        logger.error(f"encountered Exception: {e}")
         raise HTTPException(status_code=500, detail=str(e))
