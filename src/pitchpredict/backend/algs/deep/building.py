@@ -82,6 +82,9 @@ async def _build_pitch_tokens_and_contexts(
     pitch_contexts = []
 
     for index, row in pitches.iterrows():
+        if not row["pitch_type"]:
+            continue
+        
         event = str(row["events"])
         end_of_pa = event != "" or False
         
