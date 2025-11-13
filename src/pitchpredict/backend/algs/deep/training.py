@@ -29,7 +29,7 @@ def collate_batch(
     lengths_sorted, perm_idx = torch.sort(lengths, descending=True)
     perm_idx_list = perm_idx.tolist()
     seqs_sorted = [seqs[i] for i in perm_idx_list]
-    labels_sorted = torch.tensor([labels[i] for i in perm_idx], dtype=torch.long)
+    labels_sorted = torch.tensor([labels[i] for i in perm_idx_list], dtype=torch.long)
 
     padded = pad_sequence(seqs_sorted, batch_first=True, padding_value=pad_id)
 
