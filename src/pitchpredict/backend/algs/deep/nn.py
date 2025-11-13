@@ -1,13 +1,10 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
-import math
-import random
-
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
-from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from torch.utils.data import Dataset
 
 from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 
@@ -26,17 +23,14 @@ class PitchDataset(Dataset):
     ) -> None:
         if len(pitch_tokens) != len(pitch_contexts):
             raise ValueError("pitch_tokens and pitch_contexts must have the same length")
-        if len(pitch_tokens) < 2:
-            raise ValueError("need at least two pitch events to build samples")
 
-        self.n_pitches = len(pitch_tokens)
-        self.n_samples = self.n_pitches - 1
-
-        self.rng = random.Random(seed)
         self.pad_id = pad_id
+        self.seed = seed
         self.pitch_vocab = self._build_vocab(pitch_tokens)
 
         self.samples = self._make_samples(pitch_tokens, pitch_contexts)
+        if not self.samples:
+            raise ValueError("no plate appearances with at least two pitches were found")
         first_seq, _ = self.samples[0]
         self.feature_dim = first_seq.size(-1)
         self.num_classes = len(self.pitch_vocab)
@@ -58,27 +52,48 @@ class PitchDataset(Dataset):
         pitch_contexts: list[PitchContext],
     ) -> list[tuple[torch.Tensor, torch.Tensor]]:
         """
-        Make samples from the given pitch tokens and contexts.
+        Build (sequence, label) pairs from plate appearances.
         """
         samples: list[tuple[torch.Tensor, torch.Tensor]] = []
 
-        for i in range(self.n_samples):
-            token_tensor = pitch_tokens[i].to_tensor().float()
-            context_tensor = pitch_contexts[i].to_tensor().float()
+        current_features: list[torch.Tensor] = []
+        current_types: list[str] = []
+
+        for token, context in zip(pitch_tokens, pitch_contexts):
+            token_tensor = token.to_tensor().float()
+            context_tensor = context.to_tensor().float()
             combined_tensor = torch.cat((token_tensor, context_tensor), dim=0)
 
-            next_pitch_type = pitch_tokens[i + 1].type
-            label_tensor = torch.tensor(self.pitch_vocab[next_pitch_type], dtype=torch.long)
+            current_features.append(combined_tensor)
+            current_types.append(token.type)
 
-            # treat each pitch/context pair as a single timestep sequence
-            seq_tensor = combined_tensor.unsqueeze(0)
+            if token.end_of_pa:
+                self._add_plate_samples(current_features, current_types, samples)
+                current_features = []
+                current_types = []
 
-            samples.append((seq_tensor, label_tensor))
+        # handle trailing plate appearance if the data chunk ended mid-PA
+        self._add_plate_samples(current_features, current_types, samples)
 
         return samples
 
+    def _add_plate_samples(
+        self,
+        features: list[torch.Tensor],
+        pitch_types: list[str],
+        samples: list[tuple[torch.Tensor, torch.Tensor]],
+    ) -> None:
+        if len(features) < 2:
+            return
+
+        for i in range(len(features) - 1):
+            seq_tensor = torch.stack(features[: i + 1], dim=0)
+            next_pitch_type = pitch_types[i + 1]
+            label_tensor = torch.tensor(self.pitch_vocab[next_pitch_type], dtype=torch.long)
+            samples.append((seq_tensor, label_tensor))
+
     def __len__(self) -> int:
-        return self.n_samples
+        return len(self.samples)
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self.samples[index]
