@@ -34,6 +34,7 @@ async def build_deep_model(
     """
     # get pitch data for the given date range
     pitches = await get_all_pitches(date_start, date_end)
+    pitches = _clean_pitch_rows(pitches)
 
     pitch_tokens, pitch_contexts = await _build_pitch_tokens_and_contexts(pitches)
 
@@ -87,8 +88,9 @@ async def _build_pitch_tokens_and_contexts(
         if not row["pitch_type"]:
             continue
 
-        event = str(row["events"])
-        end_of_pa = event != "" or False
+        raw_event = row["events"]
+        event = raw_event if isinstance(raw_event, str) else ""
+        end_of_pa = bool(event)
         
         pitch_token = PitchToken(
             type=row["pitch_type"],
@@ -144,3 +146,35 @@ def _build_pitch_dataset(
     Build the pitch dataset from the given pitch tokens and contexts.
     """
     return PitchDataset(pitch_tokens, pitch_contexts, seed, pad_id)
+
+
+def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
+    """
+    Drop rows that are missing fields required by the deep model.
+    """
+    required_columns = [
+        "pitch_type",
+        "release_speed",
+        "release_pos_x",
+        "release_pos_z",
+        "plate_x",
+        "plate_z",
+        "game_pk",
+        "at_bat_number",
+        "pitch_number",
+        "p_throws",
+        "stand",
+        "balls",
+        "strikes",
+        "outs_when_up",
+        "bat_score",
+        "fld_score",
+        "inning",
+        "pitch_number",
+        "n_thruorder_pitcher",
+        "game_date",
+        "age_pit",
+        "age_bat",
+    ]
+    cleaned = pitches.dropna(subset=required_columns)
+    return cleaned.reset_index(drop=True)
