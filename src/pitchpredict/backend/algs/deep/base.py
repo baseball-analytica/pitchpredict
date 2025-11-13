@@ -19,7 +19,7 @@ class DeepPitchPredictAlgorithm(PitchPredictAlgorithm):
         self,
         name: str = "deep",
         use_existing: bool = True,
-        model_path: str = ".pitchpredict_models/weights/deep.pth",
+        model_path: str = os.getcwd() + "/.pitchpredict_models/deep_pitch.pth",
         # build parameters (for when use_existing is False)
         date_start: str = "2015-04-01",
         date_end: str = "2024-12-31",

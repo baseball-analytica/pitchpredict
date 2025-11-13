@@ -26,12 +26,31 @@ class PitchDataset(Dataset):
     ) -> None:
         if len(pitch_tokens) != len(pitch_contexts):
             raise ValueError("pitch_tokens and pitch_contexts must have the same length")
+        if len(pitch_tokens) < 2:
+            raise ValueError("need at least two pitch events to build samples")
+
         self.n_pitches = len(pitch_tokens)
         self.n_samples = self.n_pitches - 1
 
         self.rng = random.Random(seed)
         self.pad_id = pad_id
+        self.pitch_vocab = self._build_vocab(pitch_tokens)
+
         self.samples = self._make_samples(pitch_tokens, pitch_contexts)
+        first_seq, _ = self.samples[0]
+        self.feature_dim = first_seq.size(-1)
+        self.num_classes = len(self.pitch_vocab)
+
+    def _build_vocab(
+        self,
+        pitch_tokens: list[PitchToken],
+    ) -> dict[str, int]:
+        vocab: dict[str, int] = {}
+        for token in pitch_tokens:
+            pitch_type = token.type
+            if pitch_type not in vocab:
+                vocab[pitch_type] = len(vocab)
+        return vocab
 
     def _make_samples(
         self,
@@ -41,18 +60,20 @@ class PitchDataset(Dataset):
         """
         Make samples from the given pitch tokens and contexts.
         """
-        samples = []
+        samples: list[tuple[torch.Tensor, torch.Tensor]] = []
 
         for i in range(self.n_samples):
-            token_tensor = pitch_tokens[i].to_tensor()
-            context_tensor = pitch_contexts[i].to_tensor()
-            token_tensor_next = pitch_tokens[i + 1].to_tensor()
-            context_tensor_next = pitch_contexts[i + 1].to_tensor()
+            token_tensor = pitch_tokens[i].to_tensor().float()
+            context_tensor = pitch_contexts[i].to_tensor().float()
+            combined_tensor = torch.cat((token_tensor, context_tensor), dim=0)
 
-            combined_tensor = torch.cat((token_tensor, context_tensor))
-            combined_tensor_next = torch.cat((token_tensor_next, context_tensor_next))
+            next_pitch_type = pitch_tokens[i + 1].type
+            label_tensor = torch.tensor(self.pitch_vocab[next_pitch_type], dtype=torch.long)
 
-            samples.append((combined_tensor, combined_tensor_next))
+            # treat each pitch/context pair as a single timestep sequence
+            seq_tensor = combined_tensor.unsqueeze(0)
+
+            samples.append((seq_tensor, label_tensor))
 
         return samples
 
@@ -70,7 +91,7 @@ class DeepPitcherModel(nn.Module):
 
     def __init__(
         self,
-        vocab_size: int,
+        input_dim: int,
         embed_dim: int,
         hidden_size: int,
         num_layers: int = 1,
@@ -80,7 +101,7 @@ class DeepPitcherModel(nn.Module):
         num_classes: int = 2,
     ) -> None:
         super().__init__()
-        self.embed = nn.Embedding(vocab_size, embed_dim, padding_idx=pad_idx)
+        self.input_proj = nn.Linear(input_dim, embed_dim)
 
         self.lstm = nn.LSTM(
             input_size=embed_dim,
@@ -105,18 +126,18 @@ class DeepPitcherModel(nn.Module):
         Forward pass through the model.
 
         Args:
-            x: (B, T) token ids
+            x: (B, T, input_dim) feature vectors
             lengths: (B,) lengths before padding, sorted descending
 
         Returns:
             logits: (B, num_classes)
         """
-        emb = self.embed(x)
+        emb = self.input_proj(x)
         packed = pack_padded_sequence(emb, lengths.cpu(), batch_first=True, enforce_sorted=True)
         packed_out, (h_n, c_n) = self.lstm(packed)
 
         out_unpacked, out_lengths = pad_packed_sequence(packed_out, batch_first=True)
-        idx = (out_lengths - 1).unsqueeze(1).unsqueeze(2).expand(out_unpacked.size(0), 1, out_unpacked.size(2))
+        idx = (out_lengths - 1).unsqueeze(1).unsqueeze(2).expand(out_unpacked.size(0), 1, out_unpacked.size(2)).to(x.device)
         last_valid = out_unpacked.gather(1, idx).squeeze(1)
 
         logits = self.classifier(last_valid)

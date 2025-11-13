@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
-from typing import Any
+import os
 
 import pandas as pd
 import torch
@@ -15,19 +15,19 @@ from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 async def build_deep_model(
     date_start: str,
     date_end: str,
-    vocab_size: int,
     embed_dim: int,
     hidden_size: int,
+    vocab_size: int | None = None,
     num_layers: int = 1,
     bidirectional: bool = False,
     dropout: float = 0.0,
     pad_idx: int = 0,
-    num_classes: int = 2,
+    num_classes: int | None = None,
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     batch_size: int = 32,
     learning_rate: float = 0.001,
     num_epochs: int = 10,
-    model_path: str = ".pitchpredict_models/deep_pitch.pth",
+    model_path: str = os.getcwd() + "/.pitchpredict_models/deep_pitch.pth",
 ) -> DeepPitcherModel:
     """
     Build a new deep model from scratch using the given parameters.
@@ -40,15 +40,21 @@ async def build_deep_model(
     pitch_dataset = _build_pitch_dataset(pitch_tokens, pitch_contexts)
     train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
 
+    input_dim = pitch_dataset.feature_dim
+    dataset_num_classes = pitch_dataset.num_classes
+    effective_num_classes = num_classes or vocab_size or dataset_num_classes
+    if effective_num_classes < dataset_num_classes:
+        raise ValueError(f"num_classes ({effective_num_classes}) must cover all pitch types ({dataset_num_classes})")
+
     model = DeepPitcherModel(
-        vocab_size=vocab_size,
+        input_dim=input_dim,
         embed_dim=embed_dim,
         hidden_size=hidden_size,
         num_layers=num_layers,
         bidirectional=bidirectional,
         dropout=dropout,
         pad_idx=pad_idx,
-        num_classes=num_classes,
+        num_classes=effective_num_classes,
     ).to(device)
 
     train_model(
@@ -115,6 +121,10 @@ async def _build_pitch_tokens_and_contexts(
             game_date=game_date,
         )
         pitch_contexts.append(pitch_context)
+    
+    # reverse the order of the pitch tokens and contexts
+    pitch_tokens = pitch_tokens[::-1]
+    pitch_contexts = pitch_contexts[::-1]
         
     return pitch_tokens, pitch_contexts
 
