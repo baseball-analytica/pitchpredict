@@ -6,6 +6,8 @@ from typing import Any
 import pandas as pd
 import torch
 
+from pitchpredict.backend.algs.deep.nn import DeepPitcherModel, PitchDataset
+from pitchpredict.backend.algs.deep.training import train_model
 from pitchpredict.backend.fetching import get_all_pitches
 from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 
@@ -13,7 +15,20 @@ from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 async def build_deep_model(
     date_start: str,
     date_end: str,
-) -> torch.nn.RNN:
+    vocab_size: int,
+    embed_dim: int,
+    hidden_size: int,
+    num_layers: int = 1,
+    bidirectional: bool = False,
+    dropout: float = 0.0,
+    pad_idx: int = 0,
+    num_classes: int = 2,
+    device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    batch_size: int = 32,
+    learning_rate: float = 0.001,
+    num_epochs: int = 10,
+    model_path: str = ".pitchpredict_models/deep_pitch.pth",
+) -> DeepPitcherModel:
     """
     Build a new deep model from scratch using the given parameters.
     """
@@ -22,11 +37,33 @@ async def build_deep_model(
 
     pitch_tokens, pitch_contexts = await _build_pitch_tokens_and_contexts(pitches)
 
-    print(f"built {len(pitch_tokens)} pitch tokens and {len(pitch_contexts)} pitch contexts")
-    print(pitch_tokens[0].to_tensor())
-    print(pitch_contexts[0].to_tensor())
+    pitch_dataset = _build_pitch_dataset(pitch_tokens, pitch_contexts)
+    train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
 
-    raise NotImplementedError("Not implemented")
+    model = DeepPitcherModel(
+        vocab_size=vocab_size,
+        embed_dim=embed_dim,
+        hidden_size=hidden_size,
+        num_layers=num_layers,
+        bidirectional=bidirectional,
+        dropout=dropout,
+        pad_idx=pad_idx,
+        num_classes=num_classes,
+    ).to(device)
+
+    train_model(
+        model=model,
+        train_data=train_dataset,
+        val_data=val_dataset,
+        device=device,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        num_epochs=num_epochs,
+        model_path=model_path,
+        pad_id=pad_idx,
+    )
+
+    return model
 
 
 async def _build_pitch_tokens_and_contexts(
@@ -80,3 +117,15 @@ async def _build_pitch_tokens_and_contexts(
         pitch_contexts.append(pitch_context)
         
     return pitch_tokens, pitch_contexts
+
+
+def _build_pitch_dataset(
+    pitch_tokens: list[PitchToken],
+    pitch_contexts: list[PitchContext],
+    seed: int = 0,
+    pad_id: int = 0,
+) -> PitchDataset:
+    """
+    Build the pitch dataset from the given pitch tokens and contexts.
+    """
+    return PitchDataset(pitch_tokens, pitch_contexts, seed, pad_id)

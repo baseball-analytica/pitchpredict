@@ -7,6 +7,7 @@ from typing import Any
 import torch
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
+from pitchpredict.backend.algs.deep.building import build_deep_model
 
 
 class DeepPitchPredictAlgorithm(PitchPredictAlgorithm):
@@ -22,7 +23,11 @@ class DeepPitchPredictAlgorithm(PitchPredictAlgorithm):
         # build parameters (for when use_existing is False)
         date_start: str = "2015-04-01",
         date_end: str = "2024-12-31",
-        
+        vocab_size: int = 13,
+        embed_dim: int = 128,
+        hidden_size: int = 128,
+        num_layers: int = 1,
+        bidirectional: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -31,23 +36,31 @@ class DeepPitchPredictAlgorithm(PitchPredictAlgorithm):
         )
         self.use_existing = use_existing
         self.model_path = model_path
+        self.date_start = date_start
+        self.date_end = date_end
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.bidirectional = bidirectional
 
-    def __post_init__(self) -> None:
-        """
-        Perform post-initialization tasks, including validation.
-        """
-        if self.use_existing:
-            if not os.path.exists(self.model_path):
-                raise FileNotFoundError(f"model path {self.model_path} does not exist")
-            self.load_model()
-        else:
-            self.build_model()
-
-    def build_model(self) -> None:
+    async def build_model(
+        self,
+    ) -> None:
         """
         Build a new model from scratch using the given parameters.
         """
-        raise NotImplementedError("Not implemented")
+        model = await build_deep_model(
+            date_start=self.date_start,
+            date_end=self.date_end,
+            vocab_size=self.vocab_size,
+            embed_dim=self.embed_dim,
+            hidden_size=self.hidden_size,
+            num_layers=self.num_layers,
+            bidirectional=self.bidirectional,
+            model_path=self.model_path,
+        )
+        self.model = model
 
     def load_model(self) -> None:
         """

@@ -27,7 +27,8 @@ def collate_batch(
     lengths = torch.tensor([len(seq) for seq in seqs], dtype=torch.long)
     # sort by length descending for pack_padded_sequence
     lengths_sorted, perm_idx = torch.sort(lengths, descending=True)
-    seqs_sorted = [seqs[i] for i in perm_idx]
+    perm_idx_list = perm_idx.tolist()
+    seqs_sorted = [seqs[i] for i in perm_idx_list]
     labels_sorted = torch.tensor([labels[i] for i in perm_idx], dtype=torch.long)
 
     padded = pad_sequence(seqs_sorted, batch_first=True, padding_value=pad_id)
@@ -123,12 +124,13 @@ def train_model(
     learning_rate: float,
     num_epochs: int,
     model_path: str,
+    pad_id: int,
 ) -> None:
     """
     Train the model on the given data.
     """
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, collate_fn=collate_batch)
-    val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False, collate_fn=collate_batch)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, collate_fn=lambda batch: collate_batch(pad_id, batch))
+    val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False, collate_fn=lambda batch: collate_batch(pad_id, batch))
 
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
