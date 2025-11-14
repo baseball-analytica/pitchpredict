@@ -1,67 +1,99 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
+from dataclasses import dataclass
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel
 import torch
 
 
-class PitchToken(BaseModel):
-    type: str
-    speed: float
-    release_pos_x: float
-    release_pos_z: float
-    plate_pos_x: float
-    plate_pos_z: float
-    event: str
-    end_of_pa: bool = False
+
+class PitchTokenType(Enum):
+    STREAM = 0
+    STREAM_END = 1
+    PITCH = 2
+    PITCH_END = 3
+    IS_CH = 4
+    IS_CU = 5
+    IS_FC = 6
+    IS_EP = 7
+    IS_FO = 8
+    IS_FF = 9
+    IS_KN = 10
+    IS_KC = 11
+    IS_SC = 12
+    IS_SI = 13
+    IS_SL = 14
+    IS_SV = 15
+    IS_FS = 16
+    IS_ST = 17
+    SPEED = 18
+    RELEASE_POS_X = 19
+    RELEASE_POS_Z = 20
+    PLATE_POS_X = 21
+    PLATE_POS_Z = 22
+    EVENT_IS_NONE = 24
+
+@dataclass
+class PitchToken:
+    """
+    A single token output by the deep model.
+    """
+    type: PitchTokenType
+    value: float
 
     def to_tensor(self) -> torch.Tensor:
         """
         Convert the pitch token to a tensor.
         """
-        is_CH = 1 if self.type == "CH" else -1
-        is_CU = 1 if self.type == "CU" else -1
-        is_FC = 1 if self.type == "FC" else -1
-        is_EP = 1 if self.type == "EP" else -1
-        is_FO = 1 if self.type == "FO" else -1
-        is_FF = 1 if self.type == "FF" else -1
-        is_KN = 1 if self.type == "KN" else -1
-        is_KC = 1 if self.type == "KC" else -1
-        is_SC = 1 if self.type == "SC" else -1
-        is_SI = 1 if self.type == "SI" else -1
-        is_SL = 1 if self.type == "SL" else -1
-        is_SV = 1 if self.type == "SV" else -1
-        is_FS = 1 if self.type == "FS" else -1
-        is_ST = 1 if self.type == "ST" else -1
+        token_type_tensor = torch.tensor(
+            [
+                1.0 if self.type == PitchTokenType.STREAM else -1.0,
+                1.0 if self.type == PitchTokenType.STREAM_END else -1.0,
+                1.0 if self.type == PitchTokenType.PITCH else -1.0,
+                1.0 if self.type == PitchTokenType.PITCH_END else -1.0,
+                1.0 if self.type == PitchTokenType.IS_CH else -1.0,
+                1.0 if self.type == PitchTokenType.IS_CU else -1.0,
+                1.0 if self.type == PitchTokenType.IS_FC else -1.0,
+                1.0 if self.type == PitchTokenType.IS_EP else -1.0,
+                1.0 if self.type == PitchTokenType.IS_FO else -1.0,
+                1.0 if self.type == PitchTokenType.IS_FF else -1.0,
+                1.0 if self.type == PitchTokenType.IS_KN else -1.0,
+                1.0 if self.type == PitchTokenType.IS_KC else -1.0,
+                1.0 if self.type == PitchTokenType.IS_SC else -1.0,
+                1.0 if self.type == PitchTokenType.IS_SI else -1.0,
+                1.0 if self.type == PitchTokenType.IS_SL else -1.0,
+                1.0 if self.type == PitchTokenType.IS_SV else -1.0,
+                1.0 if self.type == PitchTokenType.IS_FS else -1.0,
+                1.0 if self.type == PitchTokenType.IS_ST else -1.0,
+                1.0 if self.type == PitchTokenType.SPEED else -1.0,
+                1.0 if self.type == PitchTokenType.RELEASE_POS_X else -1.0,
+                1.0 if self.type == PitchTokenType.RELEASE_POS_Z else -1.0,
+                1.0 if self.type == PitchTokenType.PLATE_POS_X else -1.0,
+                1.0 if self.type == PitchTokenType.PLATE_POS_Z else -1.0,
+                1.0 if self.type == PitchTokenType.EVENT_IS_NONE else -1.0,
+            ], 
+            dtype=torch.float32
+        )
+        value_tensor = torch.tensor(
+            [self.value],
+            dtype=torch.float32
+        )
+        return torch.cat((token_type_tensor, value_tensor), dim=0)
 
-        event_is_none = 1 if self.event == "" else -1
-
-        tensor = torch.tensor([
-            is_CH,
-            is_CU,
-            is_FC,
-            is_EP,
-            is_FO,
-            is_FF,
-            is_KN,
-            is_KC,
-            is_SC,
-            is_SI,
-            is_SL,
-            is_SV,
-            is_FS,
-            is_ST,
-            self.speed,
-            self.release_pos_x,
-            self.release_pos_z,
-            self.plate_pos_x,
-            self.plate_pos_z,
-            event_is_none,
-        ])
-
-        return tensor
+    @staticmethod
+    def from_tensor(tensor: torch.Tensor) -> "PitchToken":
+        """
+        Convert a tensor to a pitch token.
+        """
+        token_type_tensor = tensor[:, 0]
+        value_tensor = tensor[:, 1]
+        return PitchToken(
+            type=PitchTokenType(token_type_tensor.argmax().item()),
+            value=value_tensor.item(),
+        )
 
 
 class PitchContext(BaseModel):
