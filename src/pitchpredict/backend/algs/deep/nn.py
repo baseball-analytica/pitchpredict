@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import Dataset
 
-from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
+from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext, PitchTokenType
 
 
 class PitchDataset(Dataset):
@@ -38,12 +38,14 @@ class PitchDataset(Dataset):
     def _build_vocab(
         self,
         pitch_tokens: list[PitchToken],
-    ) -> dict[str, int]:
-        vocab: dict[str, int] = {}
+    ) -> dict[PitchTokenType, int]:
+        vocab: dict[PitchTokenType, int] = {}
+
         for token in pitch_tokens:
-            pitch_type = token.type
-            if pitch_type not in vocab:
-                vocab[pitch_type] = len(vocab)
+            token_type = token.type
+            if token_type not in vocab:
+                vocab[token_type] = len(vocab)
+
         return vocab
 
     def _make_samples(
@@ -57,7 +59,7 @@ class PitchDataset(Dataset):
         samples: list[tuple[torch.Tensor, torch.Tensor]] = []
 
         current_features: list[torch.Tensor] = []
-        current_types: list[str] = []
+        current_tokens: list[PitchToken] = []
 
         for token, context in zip(pitch_tokens, pitch_contexts):
             token_tensor = token.to_tensor().float()
@@ -65,22 +67,17 @@ class PitchDataset(Dataset):
             combined_tensor = torch.cat((token_tensor, context_tensor), dim=0)
 
             current_features.append(combined_tensor)
-            current_types.append(token.type)
-
-            if token.end_of_pa:
-                self._add_plate_samples(current_features, current_types, samples)
-                current_features = []
-                current_types = []
+            current_tokens.append(token)
 
         # handle trailing plate appearance if the data chunk ended mid-PA
-        self._add_plate_samples(current_features, current_types, samples)
+        self._add_samples(current_features, current_tokens, samples)
 
         return samples
 
-    def _add_plate_samples(
+    def _add_samples(
         self,
         features: list[torch.Tensor],
-        pitch_types: list[str],
+        tokens: list[PitchToken],
         samples: list[tuple[torch.Tensor, torch.Tensor]],
     ) -> None:
         if len(features) < 2:
@@ -88,8 +85,8 @@ class PitchDataset(Dataset):
 
         for i in range(len(features) - 1):
             seq_tensor = torch.stack(features[: i + 1], dim=0)
-            next_pitch_type = pitch_types[i + 1]
-            label_tensor = torch.tensor(self.pitch_vocab[next_pitch_type], dtype=torch.long)
+            next_token = tokens[i + 1]
+            label_tensor = next_token.to_tensor().float()
             samples.append((seq_tensor, label_tensor))
 
     def __len__(self) -> int:

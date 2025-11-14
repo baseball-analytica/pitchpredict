@@ -25,6 +25,7 @@ def collate_batch(
     """
     seqs, labels = zip(*batch)
     lengths = torch.tensor([len(seq) for seq in seqs], dtype=torch.long)
+    
     # sort by length descending for pack_padded_sequence
     lengths_sorted, perm_idx = torch.sort(lengths, descending=True)
     perm_idx_list = perm_idx.tolist()

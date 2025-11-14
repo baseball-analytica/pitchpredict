@@ -91,6 +91,13 @@ async def _build_pitch_tokens_and_contexts(
         raw_event = row["events"]
         event = raw_event if isinstance(raw_event, str) else ""
         end_of_pa = bool(event)
+
+        if row["pitch_number"] == 1:
+            token_stream = PitchToken(
+                type=PitchTokenType.STREAM,
+                value=0.0,
+            )
+            pitch_tokens.append(token_stream)
         
         token_pitch = PitchToken(
             type=PitchTokenType.PITCH,
@@ -223,6 +230,13 @@ async def _build_pitch_tokens_and_contexts(
             value=0.0,
         )
         pitch_tokens.append(token_pitch_end)
+
+        if event is not None:
+            token_stream_end = PitchToken(
+                type=PitchTokenType.STREAM_END,
+                value=0.0,
+            )
+            pitch_tokens.append(token_stream_end)
 
         runner_on_first = row["on_1b"] is not None or False
         runner_on_second = row["on_2b"] is not None or False
