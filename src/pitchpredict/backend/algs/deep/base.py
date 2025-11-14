@@ -8,7 +8,7 @@ import torch
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
 from pitchpredict.backend.algs.deep.building import build_deep_model
-from pitchpredict.backend.algs.deep.types import PitchTokenType
+from pitchpredict.backend.algs.deep.types import PitchToken
 
 
 class DeepPitchPredictAlgorithm(PitchPredictAlgorithm):
@@ -24,7 +24,7 @@ class DeepPitchPredictAlgorithm(PitchPredictAlgorithm):
         # build parameters (for when use_existing is False)
         date_start: str = "2015-04-01",
         date_end: str = "2024-12-31",
-        vocab_size: int = len(PitchTokenType),
+        vocab_size: int = len(PitchToken.__members__),
         embed_dim: int = 128,
         hidden_size: int = 128,
         num_layers: int = 1,

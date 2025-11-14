@@ -9,7 +9,7 @@ import torch
 from pitchpredict.backend.algs.deep.nn import DeepPitcherModel, PitchDataset
 from pitchpredict.backend.algs.deep.training import train_model
 from pitchpredict.backend.fetching import get_all_pitches
-from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext, PitchTokenType
+from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 
 
 async def build_deep_model(
@@ -93,150 +93,127 @@ async def _build_pitch_tokens_and_contexts(
         end_of_pa = bool(event)
 
         if row["pitch_number"] == 1:
-            token_stream = PitchToken(
-                type=PitchTokenType.STREAM,
-                value=0.0,
-            )
-            pitch_tokens.append(token_stream)
+            token_pa_start = PitchToken.PA_START
+            pitch_tokens.append(token_pa_start)
+
+        pitch_tokens.append(PitchToken.PITCH)
+
+        match row["pitch_type"]:
+            case "CH":
+                pitch_tokens.append(PitchToken.IS_CH)
+            case "CU":
+                pitch_tokens.append(PitchToken.IS_CU)
+            case "FC":
+                pitch_tokens.append(PitchToken.IS_FC)
+            case "EP":
+                pitch_tokens.append(PitchToken.IS_EP)
+            case "FO":
+                pitch_tokens.append(PitchToken.IS_FO)
+            case "FF":
+                pitch_tokens.append(PitchToken.IS_FF)
+            case "KN":
+                pitch_tokens.append(PitchToken.IS_KN)
+            case "KC":
+                pitch_tokens.append(PitchToken.IS_KC)
+            case "SC":
+                pitch_tokens.append(PitchToken.IS_SC)
+            case "SI":
+                pitch_tokens.append(PitchToken.IS_SI)
+            case "SL":
+                pitch_tokens.append(PitchToken.IS_SL)
+            case "SV":
+                pitch_tokens.append(PitchToken.IS_SV)
+            case "FS":
+                pitch_tokens.append(PitchToken.IS_FS)
+            case "ST":
+                pitch_tokens.append(PitchToken.IS_ST)
+            case _:
+                raise ValueError(f"unknown pitch type: {row['pitch_type']}")
+
+        speed = row["release_speed"].round(0)
+        if speed < 65:
+            pitch_tokens.append(PitchToken.SPEED_IS_LT65)
+        elif speed > 105:
+            pitch_tokens.append(PitchToken.SPEED_IS_GT105)
+        else:
+            token = PitchToken.SPEED_IS_65 + (speed - 65)
+            pitch_tokens.append(token)
+
+        release_pos_x = row["release_pos_x"].round(2)
+        if release_pos_x < -4:
+            pitch_tokens.append(PitchToken.RELEASE_POS_X_IS_LTN4)
+        elif release_pos_x > 4:
+            pitch_tokens.append(PitchToken.RELEASE_POS_X_IS_GT4)
+        else:
+            token = PitchToken.RELEASE_POS_X_IS_N4_N375 + (release_pos_x + 4)
+            pitch_tokens.append(token)
+
+        release_pos_z = row["release_pos_z"].round(2)
+        if release_pos_z < -4:
+            pitch_tokens.append(PitchToken.RELEASE_POS_Z_IS_LT4)
+        elif release_pos_z > 4:
+            pitch_tokens.append(PitchToken.RELEASE_POS_Z_IS_GT7)
+        else:
+            token = PitchToken.RELEASE_POS_Z_IS_4_425 + (release_pos_z - 4)
+            pitch_tokens.append(token)
+
+        plate_pos_x = row["plate_x"].round(2)
+        if plate_pos_x < -2:
+            pitch_tokens.append(PitchToken.PLATE_POS_X_IS_LTN2)
+        elif plate_pos_x > 2:
+            pitch_tokens.append(PitchToken.PLATE_POS_X_IS_GT2)
+        else:
+            token = PitchToken.PLATE_POS_X_IS_N2_N175 + (plate_pos_x + 2)
+            pitch_tokens.append(token)
+
+        plate_pos_z = row["plate_z"].round(2)
+        if plate_pos_z < -1:
+            pitch_tokens.append(PitchToken.PLATE_POS_Z_IS_LTN1)
+        elif plate_pos_z > 1:
+            pitch_tokens.append(PitchToken.PLATE_POS_Z_IS_GT5)
+        else:
+            token = PitchToken.PLATE_POS_Z_IS_N1_N075 + (plate_pos_z - 1)
+            pitch_tokens.append(token)
         
-        token_pitch = PitchToken(
-            type=PitchTokenType.PITCH,
-            value=0.0,
-        )
-        pitch_tokens.append(token_pitch)
+        match row["description"]:
+            case "ball":
+                pitch_tokens.append(PitchToken.RESULT_IS_BALL)
+            case "ball in dirt":
+                pitch_tokens.append(PitchToken.RESULT_IS_BALL_IN_DIRT)
+            case "called strike":
+                pitch_tokens.append(PitchToken.RESULT_IS_CALLED_STRIKE)
+            case "foul":
+                pitch_tokens.append(PitchToken.RESULT_IS_FOUL)
+            case "foul bunt":
+                pitch_tokens.append(PitchToken.RESULT_IS_FOUL_BUNT)
+            case "foul tip":
+                pitch_tokens.append(PitchToken.RESULT_IS_FOUL_TIP)
+            case "foul tip bunt":
+                pitch_tokens.append(PitchToken.RESULT_IS_FOUL_TIP_BUNT)
+            case "foul tip pitchout":
+                pitch_tokens.append(PitchToken.RESULT_IS_FOUL_PITCHOUT)
+            case "hit by pitch":
+                pitch_tokens.append(PitchToken.RESULT_IS_HIT_BY_PITCH)
+            case "intentional ball":
+                pitch_tokens.append(PitchToken.RESULT_IS_INTENTIONAL_BALL)
+            case "in play":
+                pitch_tokens.append(PitchToken.RESULT_IS_IN_PLAY)
+            case "missed bunt":
+                pitch_tokens.append(PitchToken.RESULT_IS_MISSED_BUNT)
+            case "pitchout":
+                pitch_tokens.append(PitchToken.RESULT_IS_PITCHOUT)
+            case "swinging strike":
+                pitch_tokens.append(PitchToken.RESULT_IS_SWINGING_STRIKE)
+            case "swinging strike blocked":
+                pitch_tokens.append(PitchToken.RESULT_IS_SWINGING_STRIKE_BLOCKED)
+            case _:
+                raise ValueError(f"unknown result: {row['description']}")
 
-        token_is_CH = PitchToken(
-            type=PitchTokenType.IS_CH,
-            value=1.0 if row["pitch_type"] == "CH" else -1.0,
-        )
-        pitch_tokens.append(token_is_CH)
+        pitch_tokens.append(PitchToken.PITCH_END)
+        
+        if end_of_pa:
+            pitch_tokens.append(PitchToken.PA_END)
 
-        token_is_CU = PitchToken(
-            type=PitchTokenType.IS_CU,
-            value=1.0 if row["pitch_type"] == "CU" else -1.0,
-        )
-        pitch_tokens.append(token_is_CU)
-
-        token_is_FC = PitchToken(
-            type=PitchTokenType.IS_FC,
-            value=1.0 if row["pitch_type"] == "FC" else -1.0,
-        )
-        pitch_tokens.append(token_is_FC)
-
-        token_is_EP = PitchToken(
-            type=PitchTokenType.IS_EP,
-            value=1.0 if row["pitch_type"] == "EP" else -1.0,
-        )
-        pitch_tokens.append(token_is_EP)
-
-        token_is_FO = PitchToken(
-            type=PitchTokenType.IS_FO,
-            value=1.0 if row["pitch_type"] == "FO" else -1.0,
-        )
-        pitch_tokens.append(token_is_FO)
-
-        token_is_FF = PitchToken(
-            type=PitchTokenType.IS_FF,
-            value=1.0 if row["pitch_type"] == "FF" else -1.0,
-        )
-        pitch_tokens.append(token_is_FF)
-
-        token_is_KN = PitchToken(
-            type=PitchTokenType.IS_KN,
-            value=1.0 if row["pitch_type"] == "KN" else -1.0,
-        )
-        pitch_tokens.append(token_is_KN)
-
-        token_is_KC = PitchToken(
-            type=PitchTokenType.IS_KC,
-            value=1.0 if row["pitch_type"] == "KC" else -1.0,
-        )
-        pitch_tokens.append(token_is_KC)
-
-        token_is_SC = PitchToken(
-            type=PitchTokenType.IS_SC,
-            value=1.0 if row["pitch_type"] == "SC" else -1.0,
-        )
-        pitch_tokens.append(token_is_SC)
-
-        token_is_SI = PitchToken(
-            type=PitchTokenType.IS_SI,
-            value=1.0 if row["pitch_type"] == "SI" else -1.0,
-        )
-        pitch_tokens.append(token_is_SI)
-
-        token_is_SL = PitchToken(
-            type=PitchTokenType.IS_SL,
-            value=1.0 if row["pitch_type"] == "SL" else -1.0,
-        )
-        pitch_tokens.append(token_is_SL)
-
-        token_is_SV = PitchToken(
-            type=PitchTokenType.IS_SV,
-            value=1.0 if row["pitch_type"] == "SV" else -1.0,
-        )
-        pitch_tokens.append(token_is_SV)
-
-        token_is_FS = PitchToken(
-            type=PitchTokenType.IS_FS,
-            value=1.0 if row["pitch_type"] == "FS" else -1.0,
-        )
-        pitch_tokens.append(token_is_FS)
-
-        token_is_ST = PitchToken(
-            type=PitchTokenType.IS_ST,
-            value=1.0 if row["pitch_type"] == "ST" else -1.0,
-        )
-        pitch_tokens.append(token_is_ST)
-
-        token_speed = PitchToken(
-            type=PitchTokenType.SPEED,
-            value=row["release_speed"],
-        )
-        pitch_tokens.append(token_speed)
-
-        token_release_pos_x = PitchToken(
-            type=PitchTokenType.RELEASE_POS_X,
-            value=row["release_pos_x"],
-        )
-        pitch_tokens.append(token_release_pos_x)
-
-        token_release_pos_z = PitchToken(
-            type=PitchTokenType.RELEASE_POS_Z,
-            value=row["release_pos_z"],
-        )
-        pitch_tokens.append(token_release_pos_z)
-
-        token_plate_pos_x = PitchToken(
-            type=PitchTokenType.PLATE_POS_X,
-            value=row["plate_x"],
-        )
-        pitch_tokens.append(token_plate_pos_x)
-
-        token_plate_pos_z = PitchToken(
-            type=PitchTokenType.PLATE_POS_Z,
-            value=row["plate_z"],
-        )
-        pitch_tokens.append(token_plate_pos_z)
-
-        token_event_is_none = PitchToken(
-            type=PitchTokenType.EVENT_IS_NONE,
-            value=1.0 if event is None else -1.0,
-        )
-        pitch_tokens.append(token_event_is_none)
-
-        token_pitch_end = PitchToken(
-            type=PitchTokenType.PITCH_END,
-            value=0.0,
-        )
-        pitch_tokens.append(token_pitch_end)
-
-        if event is not None:
-            token_stream_end = PitchToken(
-                type=PitchTokenType.STREAM_END,
-                value=0.0,
-            )
-            pitch_tokens.append(token_stream_end)
 
         runner_on_first = row["on_1b"] is not None or False
         runner_on_second = row["on_2b"] is not None or False

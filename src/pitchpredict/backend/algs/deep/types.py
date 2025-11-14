@@ -10,7 +10,7 @@ import torch
 
 
 
-class PitchTokenType(Enum):
+class PitchToken(Enum):
     PA_START = auto()
     PA_END = auto()
     PITCH = auto()

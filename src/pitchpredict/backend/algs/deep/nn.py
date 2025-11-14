@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import Dataset
 
-from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext, PitchTokenType
+from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 
 
 class PitchDataset(Dataset):
@@ -28,7 +28,7 @@ class PitchDataset(Dataset):
         self.seed = seed
         self.pitch_vocab = self._build_vocab(pitch_tokens)
 
-        self.samples = self._make_samples(pitch_tokens, pitch_contexts)
+        self.samples = self._make_samples(pitch_tokens)
         if not self.samples:
             raise ValueError("no plate appearances with at least two pitches were found")
         first_seq, _ = self.samples[0]
@@ -38,41 +38,29 @@ class PitchDataset(Dataset):
     def _build_vocab(
         self,
         pitch_tokens: list[PitchToken],
-    ) -> dict[PitchTokenType, int]:
-        vocab: dict[PitchTokenType, int] = {}
+    ) -> dict[PitchToken, int]:
+        vocab: dict[PitchToken, int] = {}
 
         for token in pitch_tokens:
-            token_type = token.type
-            if token_type not in vocab:
-                vocab[token_type] = len(vocab)
+            if token not in vocab:
+                vocab[token] = len(vocab)
 
         return vocab
 
     def _make_samples(
         self,
         pitch_tokens: list[PitchToken],
-        pitch_contexts: list[PitchContext],
     ) -> list[tuple[torch.Tensor, torch.Tensor]]:
         """
         Build (sequence, label) pairs from plate appearances.
         """
         samples: list[tuple[torch.Tensor, torch.Tensor]] = []
 
-        current_features: list[torch.Tensor] = []
-        current_tokens: list[PitchToken] = []
-
-        for token, context in zip(pitch_tokens, pitch_contexts):
-            token_tensor = token.to_tensor().float()
-            context_tensor = context.to_tensor().float()
-            combined_tensor = torch.cat((token_tensor, context_tensor), dim=0)
-
-            current_features.append(combined_tensor)
-            current_tokens.append(token)
-
-        # handle trailing plate appearance if the data chunk ended mid-PA
-        self._add_samples(current_features, current_tokens, samples)
-
-        return samples
+        for token in pitch_tokens:
+            raise NotImplementedError("not implemented")
+            
+        
+        raise NotImplementedError("not implemented")
 
     def _add_samples(
         self,
@@ -80,14 +68,8 @@ class PitchDataset(Dataset):
         tokens: list[PitchToken],
         samples: list[tuple[torch.Tensor, torch.Tensor]],
     ) -> None:
-        if len(features) < 2:
-            return
-
-        for i in range(len(features) - 1):
-            seq_tensor = torch.stack(features[: i + 1], dim=0)
-            next_token = tokens[i + 1]
-            label_tensor = next_token.to_tensor().float()
-            samples.append((seq_tensor, label_tensor))
+        
+        raise NotImplementedError("not implemented")
 
     def __len__(self) -> int:
         return len(self.samples)
