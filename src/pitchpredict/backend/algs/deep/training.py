@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
+import logging
 import math
+
 import torch
 from torch.nn.utils.rnn import pad_sequence
+from tqdm import tqdm
 
+logger = logging.getLogger(__name__)
 
 def collate_batch(
     pad_id: int,
@@ -62,10 +66,12 @@ def train_one_epoch(
     """
     Train the model for one epoch.
     """
+    logger.debug("train_one_epoch called")
+
     model.train()
     total_loss, total_acc, n = 0.0, 0.0, 0
 
-    for x, lengths, y, _, _ in loader:
+    for x, lengths, y, _, _ in tqdm(loader, total=len(loader), desc="training"):
         x = x.to(device)
         lengths = lengths.to(device)
         y = y.to(device)
@@ -84,6 +90,7 @@ def train_one_epoch(
         total_acc += accuracy(logits, y) * bsz
         n += bsz
 
+    logger.info("train_one_epoch completed successfully")
     return total_loss / n, total_acc / n
 
 
@@ -130,6 +137,8 @@ def train_model(
     """
     Train the model on the given data.
     """
+    logger.debug("train_model called")
+
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, collate_fn=lambda batch: collate_batch(pad_id, batch))
     val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False, collate_fn=lambda batch: collate_batch(pad_id, batch))
 
@@ -140,11 +149,11 @@ def train_model(
     for epoch in range(1, num_epochs + 1):
         train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, criterion, device)
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
-        print(f"Epoch {epoch:02d} | train loss {train_loss:.4f} | train acc {train_acc:.3f} | val loss {val_loss:.4f} | val acc {val_acc:.3f}")
+        logger.info(f"epoch {epoch:02d} | train loss {train_loss:.4f} | train acc {train_acc:.3f} | val loss {val_loss:.4f} | val acc {val_acc:.3f}")
 
         # save the best
         if val_loss < best_val:
             best_val = val_loss
             torch.save(model.state_dict(), model_path)
 
-    print(f"saved best model to {model_path}")
+    logger.info(f"saved best model to {model_path}")
