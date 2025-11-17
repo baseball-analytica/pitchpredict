@@ -22,13 +22,13 @@ class PitchDataset(Dataset):
         pad_id: int = 0,
     ) -> None:
         if len(pitch_tokens) != len(pitch_contexts):
-            raise ValueError("pitch_tokens and pitch_contexts must have the same length")
+            raise ValueError(f"pitch_tokens and pitch_contexts must have the same length (got {len(pitch_tokens)} tokens vs {len(pitch_contexts)} contexts)")
 
         self.pad_id = pad_id
         self.seed = seed
         self.pitch_vocab = self._build_vocab(pitch_tokens)
 
-        self.samples = self._make_samples(pitch_tokens)
+        self.samples = self._make_samples(pitch_tokens, pitch_contexts)
         if not self.samples:
             raise ValueError("no plate appearances with at least two pitches were found")
         first_seq, _ = self.samples[0]
@@ -50,17 +50,31 @@ class PitchDataset(Dataset):
     def _make_samples(
         self,
         pitch_tokens: list[PitchToken],
+        pitch_contexts: list[PitchContext],
     ) -> list[tuple[torch.Tensor, torch.Tensor]]:
         """
         Build (sequence, label) pairs from plate appearances.
         """
         samples: list[tuple[torch.Tensor, torch.Tensor]] = []
 
-        for token in pitch_tokens:
-            raise NotImplementedError("not implemented")
-            
-        
-        raise NotImplementedError("not implemented")
+        pa_features: list[torch.Tensor] = []
+        pa_tokens: list[PitchToken] = []
+
+        for token, context in zip(pitch_tokens, pitch_contexts):
+            feature_vec = self._token_to_feature(token, context)
+            pa_features.append(feature_vec)
+            pa_tokens.append(token)
+
+            if token == PitchToken.PA_END:
+                self._add_samples(pa_features, pa_tokens, samples)
+                pa_features = []
+                pa_tokens = []
+
+        # handle trailing tokens if a PA_END was missing at the end of the stream
+        if pa_tokens:
+            self._add_samples(pa_features, pa_tokens, samples)
+
+        return samples
 
     def _add_samples(
         self,
@@ -68,8 +82,28 @@ class PitchDataset(Dataset):
         tokens: list[PitchToken],
         samples: list[tuple[torch.Tensor, torch.Tensor]],
     ) -> None:
-        
-        raise NotImplementedError("not implemented")
+        # we need at least one input token and one target token
+        if len(tokens) < 2:
+            return
+
+        for end_idx in range(1, len(tokens)):
+            seq = torch.stack(features[:end_idx])
+            target_token = tokens[end_idx]
+            label = torch.tensor(self.pitch_vocab[target_token], dtype=torch.long)
+            samples.append((seq, label))
+
+    def _token_to_feature(
+        self,
+        token: PitchToken,
+        context: PitchContext,
+    ) -> torch.Tensor:
+        """
+        Convert a token/context pair into a dense feature vector.
+        """
+        token_one_hot = torch.zeros(len(self.pitch_vocab), dtype=torch.float32)
+        token_one_hot[self.pitch_vocab[token]] = 1.0
+        context_tensor = context.to_tensor().float()
+        return torch.cat([token_one_hot, context_tensor], dim=0)
 
     def __len__(self) -> int:
         return len(self.samples)

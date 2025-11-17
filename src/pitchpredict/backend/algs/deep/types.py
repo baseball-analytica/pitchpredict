@@ -29,6 +29,10 @@ class PitchToken(Enum):
     IS_SV = auto()
     IS_FS = auto()
     IS_ST = auto()
+    IS_FA = auto()
+    IS_CS = auto()
+    IS_PO = auto()
+    IS_UN = auto()
     SPEED_IS_LT65 = auto()
     SPEED_IS_65 = auto()
     SPEED_IS_66 = auto()
@@ -180,9 +184,9 @@ class PitchToken(Enum):
     RESULT_IS_SWINGING_PITCHOUT = auto()
     RESULT_IS_SWINGING_STRIKE = auto()
     RESULT_IS_SWINGING_STRIKE_BLOCKED = auto()
-
-
-
+    RESULT_IS_BLOCKED_BALL = auto()
+    RESULT_IS_AUTOMATIC_BALL = auto()
+    RESULT_IS_AUTOMATIC_STRIKE = auto()
 
 
 class PitchContext(BaseModel):

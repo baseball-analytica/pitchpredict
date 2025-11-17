@@ -79,6 +79,14 @@ async def _build_pitch_tokens_and_contexts(
     """
     Build the pitch tokens and contexts from the given pitches.
     """
+    def _offset_token(base: PitchToken, offset: int, max_offset: int) -> PitchToken:
+        clamped = max(0, min(max_offset, offset))
+        return PitchToken(base.value + clamped)
+
+    def _bin_index(value: float, base: float, step: float, max_offset: int) -> int:
+        raw = round((value - base) / step)
+        return max(0, min(max_offset, int(raw)))
+
     pitch_tokens = []
     pitch_contexts = []
 
@@ -88,131 +96,152 @@ async def _build_pitch_tokens_and_contexts(
         if not row["pitch_type"]:
             continue
 
+        tokens_this_pitch: list[PitchToken] = []
+
         raw_event = row["events"]
         event = raw_event if isinstance(raw_event, str) else ""
         end_of_pa = bool(event)
 
         if row["pitch_number"] == 1:
             token_pa_start = PitchToken.PA_START
-            pitch_tokens.append(token_pa_start)
+            tokens_this_pitch.append(token_pa_start)
 
-        pitch_tokens.append(PitchToken.PITCH)
+        tokens_this_pitch.append(PitchToken.PITCH)
 
         match row["pitch_type"]:
             case "CH":
-                pitch_tokens.append(PitchToken.IS_CH)
+                tokens_this_pitch.append(PitchToken.IS_CH)
             case "CU":
-                pitch_tokens.append(PitchToken.IS_CU)
+                tokens_this_pitch.append(PitchToken.IS_CU)
             case "FC":
-                pitch_tokens.append(PitchToken.IS_FC)
+                tokens_this_pitch.append(PitchToken.IS_FC)
             case "EP":
-                pitch_tokens.append(PitchToken.IS_EP)
+                tokens_this_pitch.append(PitchToken.IS_EP)
             case "FO":
-                pitch_tokens.append(PitchToken.IS_FO)
+                tokens_this_pitch.append(PitchToken.IS_FO)
             case "FF":
-                pitch_tokens.append(PitchToken.IS_FF)
+                tokens_this_pitch.append(PitchToken.IS_FF)
             case "KN":
-                pitch_tokens.append(PitchToken.IS_KN)
+                tokens_this_pitch.append(PitchToken.IS_KN)
             case "KC":
-                pitch_tokens.append(PitchToken.IS_KC)
+                tokens_this_pitch.append(PitchToken.IS_KC)
             case "SC":
-                pitch_tokens.append(PitchToken.IS_SC)
+                tokens_this_pitch.append(PitchToken.IS_SC)
             case "SI":
-                pitch_tokens.append(PitchToken.IS_SI)
+                tokens_this_pitch.append(PitchToken.IS_SI)
             case "SL":
-                pitch_tokens.append(PitchToken.IS_SL)
+                tokens_this_pitch.append(PitchToken.IS_SL)
             case "SV":
-                pitch_tokens.append(PitchToken.IS_SV)
+                tokens_this_pitch.append(PitchToken.IS_SV)
             case "FS":
-                pitch_tokens.append(PitchToken.IS_FS)
+                tokens_this_pitch.append(PitchToken.IS_FS)
             case "ST":
-                pitch_tokens.append(PitchToken.IS_ST)
+                tokens_this_pitch.append(PitchToken.IS_ST)
+            case "FA":
+                tokens_this_pitch.append(PitchToken.IS_FA)
+            case "CS":
+                tokens_this_pitch.append(PitchToken.IS_CS)
+            case "PO":
+                tokens_this_pitch.append(PitchToken.IS_PO)
+            case "UN":
+                tokens_this_pitch.append(PitchToken.IS_UN)
             case _:
                 raise ValueError(f"unknown pitch type: {row['pitch_type']}")
 
-        speed = row["release_speed"].round(0)
+        speed = round(row["release_speed"])
         if speed < 65:
-            pitch_tokens.append(PitchToken.SPEED_IS_LT65)
+            tokens_this_pitch.append(PitchToken.SPEED_IS_LT65)
         elif speed > 105:
-            pitch_tokens.append(PitchToken.SPEED_IS_GT105)
+            tokens_this_pitch.append(PitchToken.SPEED_IS_GT105)
         else:
-            token = PitchToken.SPEED_IS_65 + (speed - 65)
-            pitch_tokens.append(token)
+            offset = int(speed - 65)
+            token = _offset_token(PitchToken.SPEED_IS_65, offset, max_offset=40)
+            tokens_this_pitch.append(token)
 
-        release_pos_x = row["release_pos_x"].round(2)
+        release_pos_x = round(row["release_pos_x"], 2)
         if release_pos_x < -4:
-            pitch_tokens.append(PitchToken.RELEASE_POS_X_IS_LTN4)
+            tokens_this_pitch.append(PitchToken.RELEASE_POS_X_IS_LTN4)
         elif release_pos_x > 4:
-            pitch_tokens.append(PitchToken.RELEASE_POS_X_IS_GT4)
+            tokens_this_pitch.append(PitchToken.RELEASE_POS_X_IS_GT4)
         else:
-            token = PitchToken.RELEASE_POS_X_IS_N4_N375 + (release_pos_x + 4)
-            pitch_tokens.append(token)
+            offset = _bin_index(release_pos_x, base=-4.0, step=0.25, max_offset=31)
+            token = _offset_token(PitchToken.RELEASE_POS_X_IS_N4_N375, offset, max_offset=31)
+            tokens_this_pitch.append(token)
 
-        release_pos_z = row["release_pos_z"].round(2)
-        if release_pos_z < -4:
-            pitch_tokens.append(PitchToken.RELEASE_POS_Z_IS_LT4)
-        elif release_pos_z > 4:
-            pitch_tokens.append(PitchToken.RELEASE_POS_Z_IS_GT7)
+        release_pos_z = round(row["release_pos_z"], 2)
+        if release_pos_z < 4:
+            tokens_this_pitch.append(PitchToken.RELEASE_POS_Z_IS_LT4)
+        elif release_pos_z > 7:
+            tokens_this_pitch.append(PitchToken.RELEASE_POS_Z_IS_GT7)
         else:
-            token = PitchToken.RELEASE_POS_Z_IS_4_425 + (release_pos_z - 4)
-            pitch_tokens.append(token)
+            offset = _bin_index(release_pos_z, base=4.0, step=0.25, max_offset=11)
+            token = _offset_token(PitchToken.RELEASE_POS_Z_IS_4_425, offset, max_offset=11)
+            tokens_this_pitch.append(token)
 
-        plate_pos_x = row["plate_x"].round(2)
+        plate_pos_x = round(row["plate_x"], 2)
         if plate_pos_x < -2:
-            pitch_tokens.append(PitchToken.PLATE_POS_X_IS_LTN2)
+            tokens_this_pitch.append(PitchToken.PLATE_POS_X_IS_LTN2)
         elif plate_pos_x > 2:
-            pitch_tokens.append(PitchToken.PLATE_POS_X_IS_GT2)
+            tokens_this_pitch.append(PitchToken.PLATE_POS_X_IS_GT2)
         else:
-            token = PitchToken.PLATE_POS_X_IS_N2_N175 + (plate_pos_x + 2)
-            pitch_tokens.append(token)
+            offset = _bin_index(plate_pos_x, base=-2.0, step=0.25, max_offset=15)
+            token = _offset_token(PitchToken.PLATE_POS_X_IS_N2_N175, offset, max_offset=15)
+            tokens_this_pitch.append(token)
 
-        plate_pos_z = row["plate_z"].round(2)
+        plate_pos_z = round(row["plate_z"], 2)
         if plate_pos_z < -1:
-            pitch_tokens.append(PitchToken.PLATE_POS_Z_IS_LTN1)
-        elif plate_pos_z > 1:
-            pitch_tokens.append(PitchToken.PLATE_POS_Z_IS_GT5)
+            tokens_this_pitch.append(PitchToken.PLATE_POS_Z_IS_LTN1)
+        elif plate_pos_z > 5:
+            tokens_this_pitch.append(PitchToken.PLATE_POS_Z_IS_GT5)
         else:
-            token = PitchToken.PLATE_POS_Z_IS_N1_N075 + (plate_pos_z - 1)
-            pitch_tokens.append(token)
+            offset = _bin_index(plate_pos_z, base=-1.0, step=0.25, max_offset=23)
+            token = _offset_token(PitchToken.PLATE_POS_Z_IS_N1_N075, offset, max_offset=23)
+            tokens_this_pitch.append(token)
         
         match row["description"]:
             case "ball":
-                pitch_tokens.append(PitchToken.RESULT_IS_BALL)
-            case "ball in dirt":
-                pitch_tokens.append(PitchToken.RESULT_IS_BALL_IN_DIRT)
-            case "called strike":
-                pitch_tokens.append(PitchToken.RESULT_IS_CALLED_STRIKE)
+                tokens_this_pitch.append(PitchToken.RESULT_IS_BALL)
+            case "ball_in_dirt":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_BALL_IN_DIRT)
+            case "called_strike":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_CALLED_STRIKE)
             case "foul":
-                pitch_tokens.append(PitchToken.RESULT_IS_FOUL)
-            case "foul bunt":
-                pitch_tokens.append(PitchToken.RESULT_IS_FOUL_BUNT)
-            case "foul tip":
-                pitch_tokens.append(PitchToken.RESULT_IS_FOUL_TIP)
-            case "foul tip bunt":
-                pitch_tokens.append(PitchToken.RESULT_IS_FOUL_TIP_BUNT)
-            case "foul tip pitchout":
-                pitch_tokens.append(PitchToken.RESULT_IS_FOUL_PITCHOUT)
-            case "hit by pitch":
-                pitch_tokens.append(PitchToken.RESULT_IS_HIT_BY_PITCH)
-            case "intentional ball":
-                pitch_tokens.append(PitchToken.RESULT_IS_INTENTIONAL_BALL)
-            case "in play":
-                pitch_tokens.append(PitchToken.RESULT_IS_IN_PLAY)
-            case "missed bunt":
-                pitch_tokens.append(PitchToken.RESULT_IS_MISSED_BUNT)
+                tokens_this_pitch.append(PitchToken.RESULT_IS_FOUL)
+            case "foul_bunt":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_FOUL_BUNT)
+            case "foul_tip":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_FOUL_TIP)
+            case "bunt_foul_tip":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_FOUL_TIP_BUNT)
+            case "foul_pitchout":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_FOUL_PITCHOUT)
+            case "hit_by_pitch":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_HIT_BY_PITCH)
+            case "intentional_ball":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_INTENTIONAL_BALL)
+            case "hit_into_play":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_IN_PLAY)
+            case "missed_bunt":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_MISSED_BUNT)
             case "pitchout":
-                pitch_tokens.append(PitchToken.RESULT_IS_PITCHOUT)
-            case "swinging strike":
-                pitch_tokens.append(PitchToken.RESULT_IS_SWINGING_STRIKE)
-            case "swinging strike blocked":
-                pitch_tokens.append(PitchToken.RESULT_IS_SWINGING_STRIKE_BLOCKED)
+                tokens_this_pitch.append(PitchToken.RESULT_IS_PITCHOUT)
+            case "swinging_strike":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_SWINGING_STRIKE)
+            case "swinging_strike_blocked":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_SWINGING_STRIKE_BLOCKED)
+            case "blocked_ball":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_BLOCKED_BALL)
+            case "automatic_ball":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_AUTOMATIC_BALL)
+            case "automatic_strike":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_AUTOMATIC_STRIKE)
             case _:
                 raise ValueError(f"unknown result: {row['description']}")
 
-        pitch_tokens.append(PitchToken.PITCH_END)
+        tokens_this_pitch.append(PitchToken.PITCH_END)
         
         if end_of_pa:
-            pitch_tokens.append(PitchToken.PA_END)
+            tokens_this_pitch.append(PitchToken.PA_END)
 
 
         runner_on_first = row["on_1b"] is not None or False
@@ -238,7 +267,8 @@ async def _build_pitch_tokens_and_contexts(
             number_through_order=row["n_thruorder_pitcher"],
             game_date=game_date,
         )
-        pitch_contexts.append(pitch_context)
+        pitch_tokens.extend(tokens_this_pitch)
+        pitch_contexts.extend([pitch_context] * len(tokens_this_pitch))
     
     # reverse the order of the pitch tokens and contexts
     pitch_tokens = pitch_tokens[::-1]
