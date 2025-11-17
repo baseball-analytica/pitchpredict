@@ -6,7 +6,10 @@ from pitchpredict.backend.logging import init_logger
 from pybaseball import cache # type: ignore
 
 async def main():
-    init_logger()
+    init_logger(
+        log_level_console="DEBUG",
+        log_level_file="DEBUG",
+    )
     cache.enable()
 
     model = await build_deep_model(
