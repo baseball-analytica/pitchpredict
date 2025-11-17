@@ -168,6 +168,7 @@ cython_debug/
 
 # PitchPredict
 .pitchpredict_cache/
+.pitchpredict_data/
 .pitchpredict_logs/
 .pitchpredict_models/
 .scripts/

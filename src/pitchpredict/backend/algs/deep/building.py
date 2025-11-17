@@ -1,16 +1,18 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
-import os
+import logging
 
 import pandas as pd
 import torch
+from tqdm import tqdm
 
 from pitchpredict.backend.algs.deep.nn import DeepPitcherModel, PitchDataset
 from pitchpredict.backend.algs.deep.training import train_model
 from pitchpredict.backend.fetching import get_all_pitches
 from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 
+logger = logging.getLogger(__name__)
 
 async def build_deep_model(
     date_start: str,
@@ -28,17 +30,28 @@ async def build_deep_model(
     learning_rate: float = 0.001,
     num_epochs: int = 10,
     model_path: str = "./.pitchpredict_models/deep_pitch.pth",
+    dataset_path: str = "./.pitchpredict_data/pitch_data.bin",
+    dataset_log_interval: int = 1000
 ) -> DeepPitcherModel:
     """
     Build a new deep model from scratch using the given parameters.
     """
+    logger.debug("build_deep_model called")
+
     # get pitch data for the given date range
     pitches = await get_all_pitches(date_start, date_end)
     pitches = _clean_pitch_rows(pitches)
 
-    pitch_tokens, pitch_contexts = await _build_pitch_tokens_and_contexts(pitches)
+    pitch_tokens, pitch_contexts = await _build_pitch_tokens_and_contexts(pitches, dataset_log_interval)
 
-    pitch_dataset = _build_pitch_dataset(pitch_tokens, pitch_contexts)
+    pitch_dataset = _build_pitch_dataset(
+        pitch_tokens=pitch_tokens,
+        pitch_contexts=pitch_contexts,
+        seed=0,
+        pad_id=pad_idx,
+        dataset_path=dataset_path,
+        dataset_log_interval=dataset_log_interval,
+    )
     train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
 
     input_dim = pitch_dataset.feature_dim
@@ -70,15 +83,20 @@ async def build_deep_model(
         pad_id=pad_idx,
     )
 
+    logger.info("build_deep_model completed successfully")
+
     return model
 
 
 async def _build_pitch_tokens_and_contexts(
     pitches: pd.DataFrame,
+    dataset_log_interval: int = 1000,
 ) -> tuple[list[PitchToken], list[PitchContext]]:
     """
     Build the pitch tokens and contexts from the given pitches.
     """
+    logger.debug("_build_pitch_tokens_and_contexts called")
+
     def _offset_token(base: PitchToken, offset: int, max_offset: int) -> PitchToken:
         clamped = max(0, min(max_offset, offset))
         return PitchToken(base.value + clamped)
@@ -92,7 +110,9 @@ async def _build_pitch_tokens_and_contexts(
 
     pitches = pitches.sort_values(by=["game_pk", "at_bat_number", "pitch_number"])
 
-    for index, row in pitches.iterrows():
+    for i in tqdm(range(pitches.shape[0]), total=pitches.shape[0], desc="tokenizing pitches"):
+        row = pitches.iloc[i]
+
         if not row["pitch_type"]:
             continue
 
@@ -273,7 +293,8 @@ async def _build_pitch_tokens_and_contexts(
     # reverse the order of the pitch tokens and contexts
     pitch_tokens = pitch_tokens[::-1]
     pitch_contexts = pitch_contexts[::-1]
-        
+
+    logger.info("_build_pitch_tokens_and_contexts completed successfully")
     return pitch_tokens, pitch_contexts
 
 
@@ -282,17 +303,33 @@ def _build_pitch_dataset(
     pitch_contexts: list[PitchContext],
     seed: int = 0,
     pad_id: int = 0,
+    dataset_path: str = "./.pitchpredict_data/pitch_data.bin",
+    dataset_log_interval: int = 10000,
 ) -> PitchDataset:
     """
     Build the pitch dataset from the given pitch tokens and contexts.
     """
-    return PitchDataset(pitch_tokens, pitch_contexts, seed, pad_id)
+    logger.debug("_build_pitch_dataset called")
+
+    dataset = PitchDataset(
+        pitch_tokens=pitch_tokens,
+        pitch_contexts=pitch_contexts,
+        seed=seed,
+        pad_id=pad_id,
+        dataset_log_interval=dataset_log_interval,
+    )
+    dataset.save(dataset_path)
+
+    logger.info("_build_pitch_dataset completed successfully")
+    return dataset
 
 
 def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
     """
     Drop rows that are missing fields required by the deep model.
     """
+    logger.debug("_clean_pitch_rows called")
+
     required_columns = [
         "pitch_type",
         "release_speed",
@@ -318,4 +355,6 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
         "age_bat",
     ]
     cleaned = pitches.dropna(subset=required_columns)
+
+    logger.debug("_clean_pitch_rows completed successfully")
     return cleaned.reset_index(drop=True)

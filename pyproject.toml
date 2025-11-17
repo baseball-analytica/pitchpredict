@@ -28,6 +28,8 @@ dependencies = [
     "pybaseball>=2.2.7",
     "rich>=14.2.0",
     "torch>=2.9.1",
+    "tqdm>=4.67.1",
+    "types-tqdm>=4.67.0.20250809",
     "uvicorn>=0.38.0",
 ]
 
