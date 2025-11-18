@@ -4,6 +4,7 @@
 import logging
 
 import pandas as pd
+from pandas._libs.missing import NAType
 import torch
 from tqdm import tqdm
 
@@ -318,9 +319,9 @@ async def _build_pitch_tokens_and_contexts(
             tokens_this_pitch.append(PitchToken.PA_END)
 
 
-        runner_on_first = row["on_1b"] is not None or False
-        runner_on_second = row["on_2b"] is not None or False
-        runner_on_third = row["on_3b"] is not None or False
+        runner_on_first = row["on_1b"] is not NAType or False
+        runner_on_second = row["on_2b"] is not NAType or False
+        runner_on_third = row["on_3b"] is not NAType or False
         match (runner_on_first, runner_on_second, runner_on_third):
             case (False, False, False):
                 bases_state = 0
