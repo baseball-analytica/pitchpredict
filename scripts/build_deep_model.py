@@ -20,6 +20,9 @@ async def main():
         num_layers=2,
         bidirectional=False,
         dropout=0.1,
+        device=torch.device("cuda:5"),
+        path_dataset="/raid/kline/pitchpredict/.pitchpredict_data/pitch_data.bin",
+        path_contexts="/raid/kline/pitchpredict/.pitchpredict_data/pitch_contexts.json",
     )
     print(model)
 

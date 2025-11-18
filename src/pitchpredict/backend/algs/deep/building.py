@@ -30,7 +30,8 @@ async def build_deep_model(
     learning_rate: float = 0.001,
     num_epochs: int = 10,
     model_path: str = "./.pitchpredict_models/deep_pitch.pth",
-    dataset_path: str = "./.pitchpredict_data/pitch_data.bin",
+    tokens_path: str = "./.pitchpredict_data/pitch_data.bin",
+    contexts_path: str = "./.pitchpredict_data/pitch_contexts.json",
     dataset_log_interval: int = 1000
 ) -> DeepPitcherModel:
     """
@@ -49,7 +50,8 @@ async def build_deep_model(
         pitch_contexts=pitch_contexts,
         seed=0,
         pad_id=pad_idx,
-        dataset_path=dataset_path,
+        tokens_path=tokens_path,
+        contexts_path=contexts_path,
         dataset_log_interval=dataset_log_interval,
     )
     train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
@@ -375,7 +377,8 @@ def _build_pitch_dataset(
     pitch_contexts: list[PitchContext],
     seed: int = 0,
     pad_id: int = 0,
-    dataset_path: str = "./.pitchpredict_data/pitch_data.bin",
+    tokens_path: str = "./.pitchpredict_data/pitch_data.bin",
+    contexts_path: str = "./.pitchpredict_data/pitch_contexts.json",
     dataset_log_interval: int = 10000,
 ) -> PitchDataset:
     """
@@ -390,7 +393,7 @@ def _build_pitch_dataset(
         pad_id=pad_id,
         dataset_log_interval=dataset_log_interval,
     )
-    dataset.save(dataset_path)
+    dataset.save(tokens_path, contexts_path)
 
     logger.info("_build_pitch_dataset completed successfully")
     return dataset
