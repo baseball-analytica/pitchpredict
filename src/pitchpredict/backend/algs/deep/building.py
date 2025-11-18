@@ -89,7 +89,8 @@ async def build_deep_model(
 
 
 async def build_deep_model_from_dataset(
-    dataset_path: str,
+    tokens_path: str,
+    contexts_path: str,
     embed_dim: int,
     hidden_size: int,
     num_layers: int = 1,
@@ -108,11 +109,11 @@ async def build_deep_model_from_dataset(
     """
     logger.debug("build_deep_model_from_dataset called")
 
-    pitch_dataset = torch.load(dataset_path, weights_only=False)
+    pitch_dataset = PitchDataset.load(tokens_path, contexts_path, seed=0, pad_id=0, dataset_log_interval=10000)
     train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
 
-    input_dim = pitch_dataset.get("feature_dim")
-    num_classes = pitch_dataset.get("num_classes")
+    input_dim = pitch_dataset.feature_dim
+    num_classes = pitch_dataset.num_classes
 
     model = DeepPitcherModel(
         input_dim=input_dim,
@@ -310,8 +311,6 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.RESULT_IS_AUTOMATIC_STRIKE)
             case _:
                 raise ValueError(f"unknown result: {row['description']}")
-
-        tokens_this_pitch.append(PitchToken.PITCH_END)
         
         if end_of_pa:
             tokens_this_pitch.append(PitchToken.PA_END)
@@ -320,9 +319,31 @@ async def _build_pitch_tokens_and_contexts(
         runner_on_first = row["on_1b"] is not None or False
         runner_on_second = row["on_2b"] is not None or False
         runner_on_third = row["on_3b"] is not None or False
+        match (runner_on_first, runner_on_second, runner_on_third):
+            case (False, False, False):
+                bases_state = 0
+            case (True, False, False):
+                bases_state = 1
+            case (False, True, False):
+                bases_state = 2
+            case (True, True, False):
+                bases_state = 3
+            case (False, False, True):
+                bases_state = 4
+            case (True, False, True):
+                bases_state = 5
+            case (False, True, True):
+                bases_state = 6
+            case (True, True, True):
+                bases_state = 7
+            case _:
+                raise ValueError(f"unknown bases state: {runner_on_first}, {runner_on_second}, {runner_on_third}")
+
         game_date = row["game_date"].strftime("%Y-%m-%d")
 
         pitch_context = PitchContext(
+            pitcher_id=row["pitcher"],
+            batter_id=row["batter"],
             pitcher_age=row["age_pit"],
             pitcher_throws=row["p_throws"],
             batter_age=row["age_bat"],
@@ -330,9 +351,7 @@ async def _build_pitch_tokens_and_contexts(
             count_balls=row["balls"],
             count_strikes=row["strikes"],
             outs=row["outs_when_up"],
-            runner_on_first=runner_on_first,
-            runner_on_second=runner_on_second,
-            runner_on_third=runner_on_third,
+            bases_state=bases_state,
             score_bat=row["bat_score"],
             score_fld=row["fld_score"],
             inning=row["inning"],

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
+import json
 import logging
 
 import torch
@@ -46,30 +47,58 @@ class PitchDataset(Dataset):
         self.feature_dim = first_seq.size(-1)
         self.num_classes = len(self.pitch_vocab)
 
+    @staticmethod
+    def load(
+        path_tokens: str,
+        path_contexts: str,
+        seed: int = 0,
+        pad_id: int = 0,
+        dataset_log_interval: int = 10000,
+    ) -> "PitchDataset":
+        """
+        Load the pitch dataset from the given paths.
+        """
+        logger.debug("load called")
+
+        with open(path_tokens, "rb") as f:
+            token_bytes = f.read()
+
+        if len(token_bytes) % 2 != 0:
+            raise ValueError(f"expected an even number of bytes in {path_tokens}, got {len(token_bytes)}")
+
+        pitch_tokens = [
+            PitchToken(int.from_bytes(token_bytes[i : i + 2], "big") + 1)
+            for i in range(0, len(token_bytes), 2)
+        ]
+
+        with open(path_contexts, "r") as f:
+            pitch_contexts = [PitchContext.model_validate_json(line) for line in f]
+
+        return PitchDataset(pitch_tokens, pitch_contexts, seed, pad_id, dataset_log_interval)
+
     def save(
         self,
-        path: str = "./.pitchpredict_data/pitch_data.bin"
+        path_tokens: str = "./.pitchpredict_data/pitch_data.bin",
+        path_contexts: str = "./.pitchpredict_data/pitch_contexts.json"
     ) -> None:
         """
-        Save the dataset to a file.
+        Save the pitch tokens as a binary file, where each token is an integer index into the pitch vocabulary.
+        Save the pitch contexts as a JSON file, where each context is a dictionary.
         """
-        logger.debug(f"saving dataset to {path}")
+        logger.debug("save called")
 
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        torch.save(
-            {
-                "pitch_tokens": self._pitch_tokens,
-                "pitch_contexts": self._pitch_contexts,
-                "feature_dim": self.feature_dim,
-                "num_classes": self.num_classes,
-                "pad_id": self.pad_id,
-                "seed": self.seed,
-                "dataset_log_interval": self.dataset_log_interval,
-            },
-            path,
-        )
+        os.makedirs(os.path.dirname(path_tokens) or ".", exist_ok=True)
+        os.makedirs(os.path.dirname(path_contexts) or ".", exist_ok=True)
 
-        logger.info(f"dataset saved to {path}")
+        with open(path_tokens, "wb") as f:
+            for token in self._pitch_tokens:
+                f.write(token.value.to_bytes(2, "big"))
+
+        with open(path_contexts, "w") as f:
+            for context in self._pitch_contexts:
+                f.write(context.model_dump_json() + "\n")
+
+        logger.info(f"dataset saved to {path_tokens} and {path_contexts}")
 
     def _build_vocab(
         self,

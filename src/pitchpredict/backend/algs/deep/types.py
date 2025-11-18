@@ -14,7 +14,6 @@ class PitchToken(Enum):
     PA_START = auto()
     PA_END = auto()
     PITCH = auto()
-    PITCH_END = auto()
     IS_CH = auto()
     IS_CU = auto()
     IS_FC = auto()
@@ -190,6 +189,8 @@ class PitchToken(Enum):
 
 
 class PitchContext(BaseModel):
+    pitcher_id: int
+    batter_id: int
     pitcher_age: int
     pitcher_throws: Literal["L", "R"]
     batter_age: int
@@ -197,9 +198,7 @@ class PitchContext(BaseModel):
     count_balls: int
     count_strikes: int
     outs: int
-    runner_on_first: bool
-    runner_on_second: bool
-    runner_on_third: bool
+    bases_state: int
     score_bat: int
     score_fld: int
     inning: int
@@ -216,6 +215,8 @@ class PitchContext(BaseModel):
         game_year = int(self.game_date.split("-")[0])
 
         tensor = torch.tensor([
+            self.pitcher_id,
+            self.batter_id,
             self.pitcher_age,
             pitcher_is_lefty,
             self.batter_age,
@@ -223,9 +224,7 @@ class PitchContext(BaseModel):
             self.count_balls,
             self.count_strikes,
             self.outs,
-            self.runner_on_first,
-            self.runner_on_second,
-            self.runner_on_third,
+            self.bases_state,
             self.score_bat,
             self.score_fld,
             self.inning,
