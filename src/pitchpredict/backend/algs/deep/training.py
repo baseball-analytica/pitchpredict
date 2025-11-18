@@ -104,10 +104,12 @@ def evaluate(
     """
     Evaluate the model on the given data.
     """
+    logger.debug("evaluate called")
+
     model.eval()
     total_loss, total_acc, n = 0.0, 0.0, 0
 
-    for x, lengths, y, _, _ in loader:
+    for x, lengths, y, _, _ in tqdm(loader, total=len(loader), desc="evaluating"):
         x = x.to(device)
         lengths = lengths.to(device)
         y = y.to(device)
@@ -120,6 +122,7 @@ def evaluate(
         total_acc += accuracy(logits, y) * bsz
         n += bsz
 
+    logger.info("evaluate completed successfully")
     return total_loss / n, total_acc / n
 
 

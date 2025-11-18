@@ -88,6 +88,59 @@ async def build_deep_model(
     return model
 
 
+async def build_deep_model_from_dataset(
+    dataset_path: str,
+    embed_dim: int,
+    hidden_size: int,
+    num_layers: int = 1,
+    bidirectional: bool = False,
+    dropout: float = 0.0,
+    pad_idx: int = 0,
+    num_classes: int | None = None,
+    device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    batch_size: int = 32,
+    learning_rate: float = 0.001,
+    num_epochs: int = 10,
+    model_path: str = "./.pitchpredict_models/deep_pitch.pth",
+) -> DeepPitcherModel:
+    """
+    Build a new deep model from a pre-existing dataset.
+    """
+    logger.debug("build_deep_model_from_dataset called")
+
+    pitch_dataset = torch.load(dataset_path, weights_only=False)
+    train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
+
+    input_dim = pitch_dataset.get("feature_dim")
+    num_classes = pitch_dataset.get("num_classes")
+
+    model = DeepPitcherModel(
+        input_dim=input_dim,
+        embed_dim=embed_dim,
+        hidden_size=hidden_size,
+        num_layers=num_layers,
+        bidirectional=bidirectional,
+        dropout=dropout,
+        pad_idx=pad_idx,
+        num_classes=num_classes,
+    ).to(device)
+
+    train_model(
+        model=model,
+        train_data=train_dataset,
+        val_data=val_dataset,
+        device=device,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        num_epochs=num_epochs,
+        model_path=model_path,
+        pad_id=pad_idx,
+    )
+
+    logger.info("build_deep_model_from_dataset completed successfully")
+    return model
+
+
 async def _build_pitch_tokens_and_contexts(
     pitches: pd.DataFrame,
     dataset_log_interval: int = 1000,

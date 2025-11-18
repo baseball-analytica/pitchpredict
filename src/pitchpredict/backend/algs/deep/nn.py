@@ -60,6 +60,8 @@ class PitchDataset(Dataset):
             {
                 "pitch_tokens": self._pitch_tokens,
                 "pitch_contexts": self._pitch_contexts,
+                "feature_dim": self.feature_dim,
+                "num_classes": self.num_classes,
                 "pad_id": self.pad_id,
                 "seed": self.seed,
                 "dataset_log_interval": self.dataset_log_interval,
