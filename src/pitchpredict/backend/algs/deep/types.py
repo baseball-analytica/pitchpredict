@@ -32,6 +32,8 @@ class PitchToken(Enum):
     IS_CS = auto()
     IS_PO = auto()
     IS_UN = auto()
+    IS_IN = auto()
+    IS_AB = auto()
     SPEED_IS_LT65 = auto()
     SPEED_IS_65 = auto()
     SPEED_IS_66 = auto()

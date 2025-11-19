@@ -222,6 +222,10 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.IS_PO)
             case "UN":
                 tokens_this_pitch.append(PitchToken.IS_UN)
+            case "IN":
+                tokens_this_pitch.append(PitchToken.IS_IN)
+            case "AB":
+                tokens_this_pitch.append(PitchToken.IS_AB)
             case _:
                 raise ValueError(f"unknown pitch type: {row['pitch_type']}")
 
@@ -294,7 +298,7 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.RESULT_IS_FOUL_PITCHOUT)
             case "hit_by_pitch":
                 tokens_this_pitch.append(PitchToken.RESULT_IS_HIT_BY_PITCH)
-            case "intentional_ball":
+            case "intentional_ball" | "intent_ball":
                 tokens_this_pitch.append(PitchToken.RESULT_IS_INTENTIONAL_BALL)
             case "hit_into_play":
                 tokens_this_pitch.append(PitchToken.RESULT_IS_IN_PLAY)
@@ -302,6 +306,8 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.RESULT_IS_MISSED_BUNT)
             case "pitchout":
                 tokens_this_pitch.append(PitchToken.RESULT_IS_PITCHOUT)
+            case "swinging_pitchout":
+                tokens_this_pitch.append(PitchToken.RESULT_IS_SWINGING_PITCHOUT)
             case "swinging_strike":
                 tokens_this_pitch.append(PitchToken.RESULT_IS_SWINGING_STRIKE)
             case "swinging_strike_blocked":
