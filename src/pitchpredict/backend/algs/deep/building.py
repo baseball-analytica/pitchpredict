@@ -31,9 +31,10 @@ async def build_deep_model(
     learning_rate: float = 0.001,
     num_epochs: int = 10,
     model_path: str = "./.pitchpredict_models/deep_pitch.pth",
-    tokens_path: str = "./.pitchpredict_data/pitch_data.bin",
-    contexts_path: str = "./.pitchpredict_data/pitch_contexts.json",
-    dataset_log_interval: int = 1000
+    tokens_path: str = "./.pitchpredict_data/pitch_seq.bin",
+    contexts_path: str = "./.pitchpredict_data/pitch_context",
+    dataset_log_interval: int = 1000,
+    data_only: bool = False,
 ) -> DeepPitcherModel:
     """
     Build a new deep model from scratch using the given parameters.
@@ -55,6 +56,8 @@ async def build_deep_model(
         contexts_path=contexts_path,
         dataset_log_interval=dataset_log_interval,
     )
+    if data_only:
+        raise ValueError("data_only is True, so we don't need to train the model")
     train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
 
     input_dim = pitch_dataset.feature_dim
@@ -182,8 +185,6 @@ async def _build_pitch_tokens_and_contexts(
         if row["pitch_number"] == 1:
             token_pa_start = PitchToken.PA_START
             tokens_this_pitch.append(token_pa_start)
-
-        tokens_this_pitch.append(PitchToken.PITCH)
 
         match row["pitch_type"]:
             case "CH":
@@ -363,11 +364,7 @@ async def _build_pitch_tokens_and_contexts(
             game_date=game_date,
         )
         pitch_tokens.extend(tokens_this_pitch)
-        pitch_contexts.extend([pitch_context] * len(tokens_this_pitch))
-    
-    # reverse the order of the pitch tokens and contexts
-    pitch_tokens = pitch_tokens[::-1]
-    pitch_contexts = pitch_contexts[::-1]
+        pitch_contexts.extend([pitch_context] * len(tokens_this_pitch)) 
 
     logger.info("_build_pitch_tokens_and_contexts completed successfully")
     return pitch_tokens, pitch_contexts
@@ -378,8 +375,8 @@ def _build_pitch_dataset(
     pitch_contexts: list[PitchContext],
     seed: int = 0,
     pad_id: int = 0,
-    tokens_path: str = "./.pitchpredict_data/pitch_data.bin",
-    contexts_path: str = "./.pitchpredict_data/pitch_contexts.json",
+    tokens_path: str = "./.pitchpredict_data/pitch_seq.bin",
+    contexts_path: str = "./.pitchpredict_data/pitch_context",
     dataset_log_interval: int = 10000,
 ) -> PitchDataset:
     """

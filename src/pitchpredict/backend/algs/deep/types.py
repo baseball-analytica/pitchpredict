@@ -13,7 +13,6 @@ import torch
 class PitchToken(Enum):
     PA_START = auto()
     PA_END = auto()
-    PITCH = auto()
     IS_CH = auto()
     IS_CU = auto()
     IS_FC = auto()

@@ -1,9 +1,19 @@
 import asyncio
 
 import torch
-from pitchpredict.backend.algs.deep.building import build_deep_model, build_deep_model_from_dataset
+from pitchpredict.backend.algs.deep.building import build_deep_model
 from pitchpredict.backend.logging import init_logger
 from pybaseball import cache # type: ignore
+
+DATA_ONLY = True
+
+# SAMPLE NUM PITCHERS = 537
+# SAMPLE NUM BATTERS = 470
+
+# FULL NUM PITCHERS = 1730
+# FULL NUM BATTERS = 1923
+# FULL NUM TOKENS = 16_905_094
+# FULL VOCAB SIZE = 192 (really 174 but padding to multiple of 64)
 
 async def main():
     init_logger(
@@ -13,16 +23,17 @@ async def main():
     cache.enable()
 
     model = await build_deep_model(
-        date_start="2025-04-01",
-        date_end="2025-05-01",
+        date_start="2023-01-01",
+        date_end="2025-11-17",
         embed_dim=128,
         hidden_size=64,
         num_layers=2,
         bidirectional=False,
         dropout=0.1,
         device=torch.device("cuda:5"),
-        tokens_path="/raid/kline/pitchpredict/.pitchpredict_data/pitch_data.bin",
-        contexts_path="/raid/kline/pitchpredict/.pitchpredict_data/pitch_contexts.json",
+        tokens_path="/raid/kline/pitchpredict/.pitchpredict_data/pitch_seq.bin",
+        contexts_path="/raid/kline/pitchpredict/.pitchpredict_data/pitch_context",
+        data_only=DATA_ONLY,
     )
     print(model)
 
