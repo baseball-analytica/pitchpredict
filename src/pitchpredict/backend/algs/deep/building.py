@@ -43,6 +43,7 @@ async def build_deep_model(
     # get pitch data for the given date range
     pitches = await get_all_pitches(date_start, date_end)
     pitches = _clean_pitch_rows(pitches)
+    pitches = _sort_pitches_by_session(pitches)
 
     pitch_tokens, pitch_contexts = await _build_pitch_tokens_and_contexts(pitches, dataset_log_interval)
 
@@ -370,11 +371,6 @@ async def _build_pitch_tokens_and_contexts(
         )
         pitch_tokens.extend(tokens_this_pitch)
         pitch_contexts.extend([pitch_context] * len(tokens_this_pitch))
-    
-    # reverse the order of the pitch tokens and contexts
-    pitch_tokens = pitch_tokens[::-1]
-    pitch_contexts = pitch_contexts[::-1]
-
     logger.info("_build_pitch_tokens_and_contexts completed successfully")
     return pitch_tokens, pitch_contexts
 
@@ -404,6 +400,36 @@ def _build_pitch_dataset(
 
     logger.info("_build_pitch_dataset completed successfully")
     return dataset
+
+
+def _sort_pitches_by_session(pitches: pd.DataFrame) -> pd.DataFrame:
+    """
+    Group pitches by (game, pitcher) sessions and order pitches chronologically inside each session.
+    """
+    logger.debug("_sort_pitches_by_session called")
+
+    if pitches.empty:
+        return pitches
+
+    required_columns = ["game_pk", "pitcher", "at_bat_number", "pitch_number", "game_date"]
+    missing = [col for col in required_columns if col not in pitches.columns]
+    if missing:
+        raise ValueError(f"missing required columns for session sorting: {missing}")
+
+    session_start = pitches.groupby(["game_pk", "pitcher"])["at_bat_number"].transform("min")
+
+    sorted_pitches = (
+        pitches.assign(_session_start=session_start)
+        .sort_values(
+            by=["game_date", "game_pk", "_session_start", "pitcher", "at_bat_number", "pitch_number"],
+            kind="mergesort",
+        )
+        .drop(columns="_session_start")
+        .reset_index(drop=True)
+    )
+
+    logger.debug("_sort_pitches_by_session completed successfully")
+    return sorted_pitches
 
 
 def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:

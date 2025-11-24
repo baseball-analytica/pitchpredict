@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
-from dataclasses import dataclass
 from enum import auto, Enum
 from typing import Literal
 
@@ -11,7 +10,9 @@ import torch
 
 
 class PitchToken(Enum):
-    PA_START = auto()
+    SESSION_START = auto() # when a pitcher enters a game
+    SESSION_END = auto() # when the pitcher leaves the game
+    PA_START = auto() # start of a plate appearance
     PA_END = auto()
     PITCH = auto()
     IS_CH = auto()
