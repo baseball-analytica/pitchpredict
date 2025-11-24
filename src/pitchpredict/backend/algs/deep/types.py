@@ -14,7 +14,6 @@ class PitchToken(Enum):
     SESSION_END = auto() # when the pitcher leaves the game
     PA_START = auto() # start of a plate appearance
     PA_END = auto()
-    PITCH = auto()
     IS_CH = auto()
     IS_CU = auto()
     IS_FC = auto()
