@@ -10,9 +10,9 @@ DATA_ONLY = True
 # SAMPLE NUM PITCHERS = 537
 # SAMPLE NUM BATTERS = 470
 
-# FULL NUM PITCHERS = 1730
-# FULL NUM BATTERS = 1923
-# FULL NUM TOKENS = 16_905_094
+# FULL NUM PITCHERS = 2962
+# FULL NUM BATTERS = 3701
+# FULL NUM TOKENS = 51_145_514
 # FULL VOCAB SIZE = 192 (really 174 but padding to multiple of 64)
 
 async def main():
@@ -23,8 +23,8 @@ async def main():
     cache.enable()
 
     model = await build_deep_model(
-        date_start="2023-01-01",
-        date_end="2025-11-17",
+        date_start="2016-01-01",
+        date_end="2025-11-18",
         embed_dim=128,
         hidden_size=64,
         num_layers=2,

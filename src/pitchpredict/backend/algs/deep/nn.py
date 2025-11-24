@@ -3,11 +3,14 @@
 
 import logging
 import os
+import random
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from operator import attrgetter
-from typing import Any
+from pathlib import Path
+from typing import Any, Sequence
 
 import numpy as np
 import torch
@@ -62,15 +65,15 @@ def _decode_handedness(value: Any) -> str:
 
 def _encode_game_date(value: str) -> float:
     raw = date.fromisoformat(value).toordinal()
-    min_date = date.fromisoformat("2023-01-01").toordinal()
-    max_date = date.fromisoformat("2025-11-17").toordinal()
+    min_date = date.fromisoformat("2015-01-01").toordinal()
+    max_date = date.fromisoformat("2025-11-18").toordinal()
     val = (raw - min_date) / (max_date - min_date)
     return max(0.0, min(1.0, val))
 
 
 def _decode_game_date(value: Any) -> str:
-    min_date = date.fromisoformat("2023-01-01").toordinal()
-    max_date = date.fromisoformat("2025-11-17").toordinal()
+    min_date = date.fromisoformat("2015-01-01").toordinal()
+    max_date = date.fromisoformat("2025-11-18").toordinal()
     val = max(0.0, min(1.0, value))
     return date.fromordinal(int(val * (max_date - min_date) + min_date)).isoformat()
 
@@ -175,6 +178,143 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
         if field_name == "batter_id":
             logger.info(f"Number of batters: {len(batters)}")
     return saved_paths
+
+
+def _write_tokens_file(tokens: Sequence[PitchToken], path: str) -> None:
+    _ensure_parent_dir(path)
+    if tokens:
+        token_array = np.empty(len(tokens), dtype=TOKEN_DTYPE)
+        for idx, token in enumerate(tokens):
+            token_array[idx] = token.value
+        token_array.tofile(path)
+    else:
+        # Ensure the file exists (or is truncated) even when no tokens are present.
+        open(path, "wb").close()
+
+
+def _write_dataset_files(
+    tokens: Sequence[PitchToken],
+    contexts: Sequence[PitchContext],
+    path_tokens: str,
+    path_context_prefix: str,
+) -> list[str]:
+    _write_tokens_file(tokens, path_tokens)
+    return _write_context_files(list(contexts), path_context_prefix)
+
+
+def _log_dataset_write(label: str, path_tokens: str, context_paths: list[str], token_count: int) -> None:
+    total_size = 0.0
+    for path in context_paths + [path_tokens]:
+        if os.path.exists(path):
+            total_size += os.path.getsize(path)
+
+    logger.info(
+        "[%s] dataset saved to %s and %d context files (total %.2f MB)",
+        label,
+        path_tokens,
+        len(context_paths),
+        total_size / 1024 / 1024,
+    )
+    logger.info("[%s] Number of pitch tokens: %d", label, token_count)
+
+    if token_count > 0:
+        size_per_pitch = total_size / token_count
+        logger.info("[%s] Size per pitch: %.2f KB", label, size_per_pitch / 1024)
+
+
+def _plate_appearance_spans(tokens: Sequence[PitchToken]) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for idx, token in enumerate(tokens):
+        if token == PitchToken.PA_END:
+            spans.append((start, idx + 1))
+            start = idx + 1
+    if start < len(tokens):
+        spans.append((start, len(tokens)))
+    return spans
+
+
+def _compute_split_targets(total_tokens: int, val_ratio: float, test_ratio: float) -> tuple[int, int]:
+    val_target = max(0, int(round(total_tokens * val_ratio)))
+    test_target = max(0, int(round(total_tokens * test_ratio)))
+
+    allowed = total_tokens if total_tokens <= 1 else total_tokens - 1
+    overflow = max(0, val_target + test_target - allowed)
+    while overflow > 0 and (val_target > 0 or test_target > 0):
+        if val_target >= test_target and val_target > 0:
+            val_target -= 1
+        elif test_target > 0:
+            test_target -= 1
+        overflow -= 1
+
+    return val_target, test_target
+
+
+def _select_indices(
+    pa_lengths: Sequence[int],
+    indices: list[int],
+    target_tokens: int,
+) -> tuple[list[int], int]:
+    selected: list[int] = []
+    token_total = 0
+    while indices and token_total < target_tokens:
+        idx = indices.pop()
+        selected.append(idx)
+        token_total += pa_lengths[idx]
+    return selected, token_total
+
+
+def _materialize_split(
+    tokens: Sequence[PitchToken],
+    contexts: Sequence[PitchContext],
+    spans: Sequence[tuple[int, int]],
+    indices: Sequence[int],
+) -> tuple[list[PitchToken], list[PitchContext]]:
+    split_tokens: list[PitchToken] = []
+    split_contexts: list[PitchContext] = []
+    for idx in sorted(indices):
+        start, end = spans[idx]
+        split_tokens.extend(tokens[start:end])
+        split_contexts.extend(contexts[start:end])
+    return split_tokens, split_contexts
+
+
+def _split_tokens_and_contexts(
+    tokens: Sequence[PitchToken],
+    contexts: Sequence[PitchContext],
+    val_ratio: float,
+    test_ratio: float,
+    seed: int,
+) -> dict[str, tuple[list[PitchToken], list[PitchContext]]]:
+    spans = _plate_appearance_spans(tokens)
+    pa_lengths = [end - start for start, end in spans]
+
+    val_target, test_target = _compute_split_targets(len(tokens), val_ratio, test_ratio)
+
+    pa_indices = list(range(len(spans)))
+    random.Random(seed).shuffle(pa_indices)
+
+    val_indices, _ = _select_indices(pa_lengths, pa_indices, val_target)
+    test_indices, _ = _select_indices(pa_lengths, pa_indices, test_target)
+    train_indices = pa_indices  # remaining
+
+    train_split = _materialize_split(tokens, contexts, spans, train_indices)
+    val_split = _materialize_split(tokens, contexts, spans, val_indices)
+    test_split = _materialize_split(tokens, contexts, spans, test_indices)
+
+    return {"train": train_split, "val": val_split, "test": test_split}
+
+
+def _prepare_split_directory(base_dir: Path, name: str, overwrite: bool) -> Path:
+    split_dir = base_dir / name
+    if split_dir.exists():
+        if not overwrite:
+            raise FileExistsError(
+                f"{split_dir} already exists. Pass split_overwrite=True to replace the existing split."
+            )
+        shutil.rmtree(split_dir)
+    split_dir.mkdir(parents=True, exist_ok=True)
+    return split_dir
 
 
 def _read_context_files(sample_count: int, prefix: str) -> list[PitchContext]:
@@ -283,36 +423,81 @@ class PitchDataset(Dataset):
     def save(
         self,
         path_tokens: str = "./.pitchpredict_data/pitch_seq.bin",
-        path_context_prefix: str = "./.pitchpredict_data/pitch_context"
+        path_context_prefix: str = "./.pitchpredict_data/pitch_context",
+        *,
+        split_val_ratio: float = 0.0,
+        split_test_ratio: float = 0.0,
+        split_seed: int = 17,
+        split_overwrite: bool = False,
     ) -> None:
         """
         Save the pitch tokens as a binary file and the pitch contexts as one
-        binary file per context field derived from the provided prefix.
+        binary file per context field derived from the provided prefix. Pass
+        non-zero split ratios to automatically create val/ and test/ splits in
+        subdirectories of the tokens directory.
         """
         logger.debug("save called")
 
-        _ensure_parent_dir(path_tokens)
+        val_ratio = max(0.0, float(split_val_ratio))
+        test_ratio = max(0.0, float(split_test_ratio))
 
-        token_array = np.empty(len(self._pitch_tokens), dtype=TOKEN_DTYPE)
-        for idx, token in enumerate(self._pitch_tokens):
-            token_array[idx] = token.value
-        token_array.tofile(path_tokens)
+        if val_ratio == 0.0 and test_ratio == 0.0:
+            saved_context_paths = _write_dataset_files(self._pitch_tokens, self._pitch_contexts, path_tokens, path_context_prefix)
+            _log_dataset_write("train", path_tokens, saved_context_paths, len(self._pitch_tokens))
+            return
 
-        saved_context_paths = _write_context_files(self._pitch_contexts, path_context_prefix)
+        splits = _split_tokens_and_contexts(
+            self._pitch_tokens,
+            self._pitch_contexts,
+            val_ratio,
+            test_ratio,
+            split_seed,
+        )
 
-        total_size = 0.0
-        for path in (saved_context_paths + [path_tokens]):
-            total_size += os.path.getsize(path)
-        logger.info(f"Total size of dataset: {total_size / 1024 / 1024:.2f} MB, {total_size / 1024:.2f} KB")
-        logger.info(f"Number of pitch tokens: {len(self._pitch_tokens)}")
-        size_per_pitch = total_size / len(self._pitch_tokens)
-        logger.info(f"Size per pitch: {size_per_pitch / 1024:.2f} KB")
+        tokens_path_obj = Path(path_tokens)
+        context_prefix_obj = Path(path_context_prefix)
+        base_dir = tokens_path_obj.parent
+
+        train_tokens, train_contexts = splits["train"]
+        train_context_paths = _write_dataset_files(
+            train_tokens,
+            train_contexts,
+            str(tokens_path_obj),
+            str(context_prefix_obj),
+        )
+        _log_dataset_write("train", str(tokens_path_obj), train_context_paths, len(train_tokens))
+
+        if val_ratio > 0.0:
+            val_dir = _prepare_split_directory(base_dir, "val", split_overwrite)
+            val_tokens_path = val_dir / tokens_path_obj.name
+            val_context_prefix = val_dir / context_prefix_obj.name
+            val_tokens, val_contexts = splits["val"]
+            val_context_paths = _write_dataset_files(
+                val_tokens,
+                val_contexts,
+                str(val_tokens_path),
+                str(val_context_prefix),
+            )
+            _log_dataset_write("val", str(val_tokens_path), val_context_paths, len(val_tokens))
+
+        if test_ratio > 0.0:
+            test_dir = _prepare_split_directory(base_dir, "test", split_overwrite)
+            test_tokens_path = test_dir / tokens_path_obj.name
+            test_context_prefix = test_dir / context_prefix_obj.name
+            test_tokens, test_contexts = splits["test"]
+            test_context_paths = _write_dataset_files(
+                test_tokens,
+                test_contexts,
+                str(test_tokens_path),
+                str(test_context_prefix),
+            )
+            _log_dataset_write("test", str(test_tokens_path), test_context_paths, len(test_tokens))
 
         logger.info(
-            "dataset saved to %s and %d context files derived from %s",
-            path_tokens,
-            len(saved_context_paths),
-            path_context_prefix,
+            "Completed in-memory split: train=%d tokens, val=%d tokens, test=%d tokens",
+            len(splits["train"][0]),
+            len(splits["val"][0]),
+            len(splits["test"][0]),
         )
 
     def _build_vocab(

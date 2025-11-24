@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default=REPO_ROOT / "/raid/kline/pitchpredict/.pitchpredict_data",
+        default="/raid/kline/pitchpredict/.pitchpredict_data/val",
         help="Directory containing the packed token/context files (default: %(default)s).",
     )
     parser.add_argument(

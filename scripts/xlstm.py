@@ -16,10 +16,20 @@ import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.checkpoint import checkpoint as ckpt
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import wandb # type: ignore
+
+from pitchpredict.backend.algs.deep.nn import PitchToken
+from pitchpredict.backend.algs.deep.dataset import PackedPitchDataset, PackedPitchChunk, PackedPitchContext, chunk_to_context
+
+"""
+uv run torchrun --standalone --nproc_per_node=6 scripts/xlstm.py \
+    --resume_path /raid/ckpts/pitch_xlstm/ckpt_step_0010000.pt \
+    --run_id r7gi1bee
+"""
+
 
 # Allow TF32 (throughput improvement)
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -64,7 +74,8 @@ def log_if_main(s: str) -> None:
 
 def setup_wandb(cfg: "Config") -> None:
     if is_main_process():
-        wandb.init(project="synth-xlstm", config=(asdict(cfg)), name="xlstm-783m")
+        wandb.init(project="baseball-xlstm", config=(asdict(cfg)), id=cfg.run_id, resume=("never" if cfg.run_id is None else "allow"))
+        cfg.run_id = wandb.run.id
 
 
 @dataclass
@@ -74,21 +85,26 @@ class Config:
     """
 
     # Data
-    data_dir: str = "/raid/datasets/synth_tokens_2m"
-    out_dir: str = "/raid/ckpts/SYNTH_xlstm_783M"
-    dataset: str = "synth"
+    data_dir: str = "/raid/kline/pitchpredict/.pitchpredict_data"
+    out_dir: str = "/raid/ckpts/pitch_xlstm_tiny_tinierseq"
+    context_prefix: str = "pitch_context"
+    run_id: str | None = None
     # Seq
-    vocab_size: int = 65536
-    seq_len: int = 4096
+    vocab_size: int = 192
+    seq_len: int = 32
 
     # Model
-    d_model: int = 1344
-    num_blocks: int = 28
+    d_model: int = 256
+    num_blocks: int = 6
     dqk_factor: float = 0.5
     num_heads: int = 8
     dropout: float = 0.0
     tie_weights: bool = False
     logits_softcap: float = 30.0
+
+    # Baseball
+    num_pitchers: int = 2962
+    num_batters: int = 3701
 
     # Gating
     denom_floor: float = 1.0
@@ -104,128 +120,23 @@ class Config:
     grad_clip: float = 0.50
 
     # Batch & Train
-    micro_batch_size: int = 1
-    grad_accum_steps: int = 10
+    micro_batch_size: int = 256
+    grad_accum_steps: int = 1
     max_steps: int = 100000
 
     # Memory features
-    tbptt: int = 2048  # 0 = off; else detach interval (e.g., 256)
+    tbptt: int = 0  # 0 = off; else detach interval (e.g., 256)
     act_ckpt: int = 1  # 0/1 toggle
 
     # Misc
-    eod_id: int = 0xFB
+    eod_id: int = PitchToken.PA_END.value
     amp_dtype: str = "bf16"
     amp_scalar_init: float = 2.0
-    seed: int = 1264
+    seed: int = 64
     resume_path: str | None = None
     log_interval: int = 1
-    eval_interval: int = 1000000
-    ckpt_interval: int = 500
-
-
-def prepare_wikitext(
-    dataset: str, data_dir: str, eod_id: int = 0xFB
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    from datasets import load_dataset  # type: ignore
-
-    ds = load_dataset("salesforce/wikitext", "wikitext-2-raw-v1")
-
-    def to_bytes(split_name: str) -> np.ndarray:
-        abytes = bytearray()
-        doc_lines: list[str] = []
-
-        def flush_doc():
-            # write one document (joined with '\n') followed by a single EOD byte
-            if doc_lines:
-                abytes.extend(("\n".join(doc_lines)).encode("utf-8", errors="ignore"))
-                abytes.append(eod_id)
-                doc_lines.clear()
-
-        for line in ds[split_name]["text"]:
-            if line.strip() == "":  # blank line => document boundary
-                flush_doc()
-            else:
-                doc_lines.append(line)
-
-        flush_doc()  # last doc if file doesn't end with a blank line
-
-        # freeze the buffer so numpy owns a stable view
-        return np.frombuffer(bytes(abytes), dtype=np.uint8)
-
-    train_b = to_bytes("train")
-    val_b = to_bytes("validation")
-    test_b = to_bytes("test")
-    return train_b, val_b, test_b
-
-
-def load_bytes_bin(path: str) -> np.ndarray:
-    with open(path, "rb") as f:
-        data = f.read()
-    return np.frombuffer(data, dtype=np.uint8)
-
-
-def prepare_synth_bytes(root="/raid/datasets/synth_bytes"):
-    train_b = load_bytes_bin(os.path.join(root, "train.bin"))
-    val_b = load_bytes_bin(os.path.join(root, "val.bin"))
-    test_b = load_bytes_bin(os.path.join(root, "test.bin"))
-    log_if_main(
-        f"Split sizes: train={len(train_b)}, val={len(val_b)}, test={len(test_b)}"
-    )
-    return train_b, val_b, test_b
-
-
-class PackedTokensDataset(Dataset):
-    def __init__(
-        self, path: str, seq_len: int, tokenizer_path: str = "/raid/weights/xlstm/"
-    ):
-        self.data = np.memmap(path, dtype=np.uint16, mode="r")
-        self.L = int(seq_len)
-        self.offset = 0
-        self.num_chunks = (self.data.size - self.offset - 1) // self.L
-
-    def set_offset(self, offset: int) -> None:
-        self.offset = int(offset) % self.L
-        self.num_chunks = max(0, (self.data.size - self.offset - 1) // self.L)
-
-    def __len__(self) -> int:
-        return self.num_chunks
-
-    def __getitem__(self, idx: int) -> tuple[torch.LongTensor, torch.LongTensor]:
-        start = self.offset + idx * self.L
-        end = start + self.L + 1
-
-        tokens = np.asarray(self.data[start:end], dtype=np.int64)
-
-        chunk = torch.from_numpy(tokens)
-        x = cast(torch.LongTensor, chunk[:-1])
-        y = cast(torch.LongTensor, chunk[1:])
-        return x, y
-
-
-class PackedByteDataset(Dataset):
-    def __init__(self, tokens: np.ndarray, seq_len: int):
-        assert tokens.dtype == np.uint8, "Expect uint8 byte array"
-        self.tok = tokens
-        self.L = int(seq_len)
-        self.offset = 0
-        self.num_chunks = (len(tokens) - self.offset - 1) // self.L
-
-    def set_offset(self, offset: int) -> None:
-        self.offset = int(offset) % self.L
-        self.num_chunks = max(0, (len(self.tok) - self.offset - 1) // self.L)
-
-    def __len__(self) -> int:
-        return self.num_chunks
-
-    def __getitem__(self, idx: int) -> tuple[torch.LongTensor, torch.LongTensor]:
-        start = self.offset + idx * self.L
-        end = start + self.L + 1
-
-        chunk = torch.from_numpy(self.tok[start:end].astype(np.int64))
-        x = cast(torch.LongTensor, chunk[:-1])
-        y = cast(torch.LongTensor, chunk[1:])
-        return x, y
-
+    eval_interval: int = 500
+    ckpt_interval: int = 1000
 
 class mLSTMCellCore(nn.Module):
     def __init__(
@@ -304,7 +215,7 @@ class MState(NamedTuple):
     m: torch.Tensor
 
 
-class mLSTMLayerV2(nn.Module):
+class mLSTMLayer(nn.Module):
     def __init__(
         self,
         d_model: int,
@@ -563,7 +474,7 @@ class SwiGLU(nn.Module):
         return self.down(F.silu(self.up(x)) * self.gate(x))
 
 
-class xLSTMBlockV2(nn.Module):
+class xLSTMBlock(nn.Module):
     """
     Post up-projection: z = x + mLSTM(RMSNorm(x)); y = z + SwiGLU(RMSNorm(z))
     """
@@ -581,7 +492,7 @@ class xLSTMBlockV2(nn.Module):
     ):
         super().__init__()
         self.pre1 = RMSNorm(d_model)
-        self.seqmix = mLSTMLayerV2(
+        self.seqmix = mLSTMLayer(
             d_model, num_heads, dqk_factor, forget_gate, denom_floor, gate_softcap
         )
         self.drop = nn.Dropout(dropout)
@@ -602,8 +513,101 @@ class xLSTMBlockV2(nn.Module):
         y = z + self.drop(self.ff(self.pre2(z)))
         return y
 
+class PitchContextAdapter(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_pitchers: int,
+        num_batters: int,
+        dropout: float = 0.1,
+    ):
+        super().__init__()
 
-class xLSTM7BStyle(nn.Module):
+        self.num_pitchers = num_pitchers
+        self.num_batters = num_batters
+        
+        # Entity embeddings
+        self.pitched_emb = nn.Embedding(num_pitchers+1, 64, padding_idx=0)
+        self.batter_emb = nn.Embedding(num_batters+1, 64, padding_idx=0)
+        
+        # State embeddings
+        self.emb_p_throws = nn.Embedding(3, 8) # 0, 1, 2
+        self.emb_b_hits = nn.Embedding(4, 8) # 0, 1, 2, 3
+        self.emb_balls = nn.Embedding(5, 8) # 0-4
+        self.emb_strikes = nn.Embedding(4, 8) # 0-3
+        self.emb_outs = nn.Embedding(4, 8) # 0-3
+        self.emb_order = nn.Embedding(5, 8) # 0-4
+        self.emb_bases = nn.Embedding(9, 16) # 0-7 (bitmask) + pad
+        self.emb_inning = nn.Embedding(25, 16) # 1-24 (clip larger)
+
+        self.cat_emb_dim = 64+64+8+8+8+8+8+8+16+16
+
+        self.num_continuous = 6
+
+        self.cont_proj = nn.Sequential(
+            nn.Linear(self.num_continuous, 128),
+            nn.LayerNorm(128),
+            nn.SiLU(),
+            nn.Linear(128, 128),
+        )
+
+        self.fusion = nn.Sequential(
+            nn.Linear(128 + self.cat_emb_dim, d_model),
+            nn.LayerNorm(d_model),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, chunk: PackedPitchContext) -> torch.Tensor:
+
+        pid = chunk.pitcher_id % self.num_pitchers
+        bid = chunk.batter_id % self.num_batters
+
+        pe = self.pitched_emb(pid+1)
+        be = self.batter_emb(bid+1)
+        te = self.emb_p_throws(chunk.pitcher_throws.clamp(0, 3))
+        he = self.emb_b_hits(chunk.batter_hits.clamp(0, 4))
+        ball_e = self.emb_balls(chunk.count_balls.clamp(0, 5))
+        str_e = self.emb_strikes(chunk.count_strikes.clamp(0, 4))
+        out_e = self.emb_outs(chunk.outs.clamp(0, 4))
+        base_e = self.emb_bases(chunk.bases_state.clamp(0, 9))
+        order_e = self.emb_order(chunk.number_through_order.clamp(0, 4))
+        inn_e = self.emb_inning(chunk.inning.clamp(0, 24))
+        
+        cont_input = torch.stack([
+            chunk.pitcher_age,
+            chunk.batter_age,
+            chunk.score_bat,
+            chunk.score_fld,
+            chunk.pitch_number,
+            chunk.game_date,
+        ], dim=-1)
+
+        cont_feats = self.cont_proj(cont_input)
+
+        combined = torch.cat([
+            pe, be,
+            te, he, ball_e, str_e, out_e, order_e, base_e, inn_e,
+            cont_feats,
+        ], dim=-1)
+
+        return self.fusion(combined)
+
+class FusionLayer(nn.Module):
+    def __init__(self, d_model: int, dropout: float = 0.1):
+        super().__init__()
+        self.proj = nn.Linear(d_model*2, d_model)
+        self.norm = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+    def forward(self, x_seq: torch.Tensor, x_ctx: torch.Tensor) -> torch.Tensor:
+        combined = torch.cat([x_seq, x_ctx], dim=-1)
+
+        out = self.proj(combined)
+        out = self.norm(out)
+        out = self.dropout(out)
+        return out
+        
+
+class BaseballxLSTM(nn.Module):
     """
     All-mLSTM, post-up blocks. Operates mLSTM at d_model.
     """
@@ -623,6 +627,8 @@ class xLSTM7BStyle(nn.Module):
         tie_weights: bool = False,
         logits_softcap: float = 30.0,
         eod_id: int = 0xFB,
+        num_pitchers: int = 1730,
+        num_batters: int = 1923,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -630,11 +636,13 @@ class xLSTM7BStyle(nn.Module):
         self.act_ckpt = bool(act_ckpt)
         self.logits_softcap = logits_softcap
 
-        self.embed = nn.Embedding(vocab_size, d_model)
+        self.token_embed = nn.Embedding(vocab_size, d_model)
+        self.context_adapter = PitchContextAdapter(d_model, num_pitchers, num_batters)
+        self.fusion = FusionLayer(d_model)
         blocks = []
         for _ in range(num_blocks):
             blocks.append(
-                xLSTMBlockV2(
+                xLSTMBlock(
                     d_model=d_model,
                     num_heads=num_heads,
                     dqk_factor=dqk_factor,
@@ -647,13 +655,16 @@ class xLSTM7BStyle(nn.Module):
             )
         self.blocks = nn.ModuleList(blocks)
         self.norm_out = RMSNorm(d_model)
+
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
         if tie_weights:
-            self.lm_head.weight = self.embed.weight  # paper did not tie; keep toggle
+            self.lm_head.weight = self.token_embed.weight  # paper did not tie; keep toggle
         self.eod_id = eod_id
 
-    def forward(self, token_ids: torch.LongTensor) -> torch.Tensor:
-        x = self.embed(token_ids)
+    def forward(self, x_seq_ids: torch.LongTensor, x_ctx: PackedPitchContext) -> torch.Tensor:
+        x_seq = self.token_embed(x_seq_ids)
+        x_ctx = self.context_adapter(x_ctx)
+        x = self.fusion(x_seq, x_ctx)
         for blk in self.blocks:
             if self.act_ckpt and self.training:
                 # checkpoint expects a fn taking tensors; thread mask explicitly
@@ -682,7 +693,7 @@ def init_gate_biases_v2(model: nn.Module) -> None:
         return float(math.log(p / (1.0 - p)))
 
     for layer in model.modules():
-        if isinstance(layer, mLSTMLayerV2) and layer.proj_ifo.bias is not None:
+        if isinstance(layer, mLSTMLayer) and layer.proj_ifo.bias is not None:
             with torch.no_grad():
                 bias = layer.proj_ifo.bias.view(layer.H, layer.dhv + 2)
                 bias[:, : layer.dhv].fill_(+1.0)  # output gate
@@ -762,9 +773,9 @@ def nll_to_bpb(nll: float) -> float:
     return float(nll / math.log(2.0))
 
 
-def build_model(cfg: Config, device: torch.device) -> xLSTM7BStyle:
+def build_model(cfg: Config, device: torch.device) -> BaseballxLSTM:
     """Instantiate the xLSTM model and initialize gate biases."""
-    model = xLSTM7BStyle(
+    model = BaseballxLSTM(
         vocab_size=cfg.vocab_size,
         d_model=cfg.d_model,
         num_heads=cfg.num_heads,
@@ -778,6 +789,8 @@ def build_model(cfg: Config, device: torch.device) -> xLSTM7BStyle:
         tie_weights=cfg.tie_weights,
         logits_softcap=cfg.logits_softcap,
         eod_id=cfg.eod_id,
+        num_pitchers=cfg.num_pitchers,
+        num_batters=cfg.num_batters,
     )
     init_gate_biases_v2(model)
     torch.cuda.set_device(device)
@@ -794,12 +807,13 @@ def load_ckpt_if_any(
     *,
     load_optimizer: bool = True,
     continue_scheduler: bool = True,
-    override_opt_hparams: bool = True,  # <-- make new config win
+    override_opt_hparams: bool = False,  # <-- make new config win
 ) -> int:
     if cfg.resume_path is None:
         return 0
     map_location = {"cuda:%d" % 0: "cuda:%d" % device.index}
     state = torch.load(cfg.resume_path, map_location=map_location)
+    cfg.run_id = state["config"].get("run_id", cfg.run_id)
 
     # 1) Weights
     missing, unexpected = model.load_state_dict(state["model"], strict=True)
@@ -863,11 +877,12 @@ def evaluate(
     total_tokens = 0
     autocast_dtype = torch.bfloat16 if amp_dtype == "bf16" else torch.float16
     with torch.no_grad():
-        for ix, (x, y) in enumerate(loader):
-            x = x.to(device, non_blocking=True)
-            y = y.to(device, non_blocking=True)
+        for ix, chunk in enumerate(loader):
+            x = chunk.x.to(device, non_blocking=True)
+            y = chunk.y.to(device, non_blocking=True)
+            x_ctx = chunk_to_context(chunk, device)
             with torch.amp.autocast("cuda", dtype=autocast_dtype):
-                logits = model(x)
+                logits = model(x, x_ctx)
                 loss = F.cross_entropy(
                     logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum"
                 )
@@ -881,28 +896,37 @@ def evaluate(
 
 def train(rank: int, world_size: int, cfg: Config) -> None:
     ddp_setup(rank, world_size)
-    setup_wandb(cfg)
+    
     set_seed(cfg.seed + rank)
 
     device = torch.device(f"cuda:{rank}")
 
     if is_main_process():
         log_if_main(
-            "Preparing dataset ... (this may download via `datasets` on first run)"
+            "Preparing dataset ..."
         )
-    # train_b, val_b, test_b = prepare_synth_bytes()
-    # train_b, val_b, test_b = prepare_wikitext(cfg.dataset, cfg.data_dir)
-    # train_b = np.concatenate([strain_b, wtrain_b])
-    # val_b = np.concatenate([sval_b, wval_b])
-    # test_b = np.concatenate([stest_b, wtest_b])
 
-    # train_ds = PackedByteDataset(train_b, cfg.seq_len)
-    # val_ds = PackedByteDataset(val_b, cfg.seq_len)
-    # test_ds = PackedByteDataset(test_b, cfg.seq_len)
+    val_dir = os.path.join(cfg.data_dir, "val")
+    test_dir = os.path.join(cfg.data_dir, "test")
 
-    train_ds = PackedTokensDataset(os.path.join(cfg.data_dir, "train.bin"), cfg.seq_len)
-    val_ds = PackedTokensDataset(os.path.join(cfg.data_dir, "val.bin"), cfg.seq_len)
-    test_ds = PackedTokensDataset(os.path.join(cfg.data_dir, "test.bin"), cfg.seq_len)
+    train_ds = PackedPitchDataset(
+        data_dir=str(cfg.data_dir),
+        seq_len=cfg.seq_len,
+        tokens_file="pitch_seq.bin",
+        context_prefix=cfg.context_prefix,
+    )
+    val_ds = PackedPitchDataset(
+        data_dir=str(val_dir),
+        seq_len=cfg.seq_len,
+        tokens_file="pitch_seq.bin",
+        context_prefix=cfg.context_prefix,
+    )
+    test_ds = PackedPitchDataset(
+        data_dir=str(test_dir),
+        seq_len=cfg.seq_len,
+        tokens_file="pitch_seq.bin",
+        context_prefix=cfg.context_prefix,
+    )
 
     train_sampler: DistributedSampler[torch.LongTensor] = DistributedSampler(
         train_ds, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
@@ -970,6 +994,8 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
     if cfg.resume_path is not None and os.path.exists(cfg.resume_path):
         global_step = load_ckpt_if_any(raw_model, optimizer, scheduler, cfg, device)
 
+    setup_wandb(cfg)
+
     model.train()
 
     tokens_per_microbatch_per_gpu = cfg.micro_batch_size * cfg.seq_len
@@ -992,20 +1018,22 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
         if dist.is_initialized():
             dist.broadcast(offset, src=0)
         train_ds.set_offset(int(offset.item()))
-        train_sampler.set_epoch(global_step // max(1, len(train_loader)) + 1)
+        epoch = global_step // max(1, len(train_loader)) + 1
+        train_sampler.set_epoch(epoch)
+        log_if_main(f"[train] epoch {epoch:02d} with offset {offset.item()} starting ...")
 
-        for it, (x, y) in enumerate(train_loader):
+        for it, chunk in enumerate(train_loader):
             last_micro = ((it + 1) % cfg.grad_accum_steps) == 0
             sync_ctx = (
                 nullcontext() if (world_size == 1 or last_micro) else model.no_sync()
             )
 
-            x = x.to(device, non_blocking=True)
-            y = y.to(device, non_blocking=True)
-
+            x = chunk.x.to(device, non_blocking=True)
+            y = chunk.y.to(device, non_blocking=True)
+            x_ctx = chunk_to_context(chunk, device)
             with sync_ctx:
                 with torch.amp.autocast("cuda", dtype=autocast_dtype):
-                    logits = model(x)
+                    logits = model(x, x_ctx)
                     loss = (
                         F.cross_entropy(
                             logits.view(-1, logits.size(-1)),
@@ -1029,10 +1057,6 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
                 if is_main_process() and (global_step % cfg.log_interval == 0):
                     avg_loss = (running_loss / cfg.log_interval).item()
                     lr_now = optimizer.param_groups[0]["lr"]
-                    elapsed = time.time() - t0
-                    log_if_main(
-                        f"[step {global_step:6d}] loss={avg_loss:.4f}  lr={lr_now:.3e}  elapsed={elapsed / 60:.1f}m"
-                    )
                     wandb.log(
                         {
                             "loss": avg_loss,
@@ -1048,8 +1072,15 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
                     model.eval()
                     val_nll, val_bpb = evaluate(model, val_loader, device, "bf16")
                     if is_main_process():
+                        elapsed = time.time() - t0
                         log_if_main(
-                            f"[eval @ step {global_step}] val_nll={val_nll:.4f}  val_bpb={val_bpb:.4f}"
+                            f"[eval @ step {global_step}] val_nll={val_nll:.4f}  val_bpb={val_bpb:.4f}  elapsed={elapsed / 60:.1f}m"
+                        )
+                        wandb.log(
+                            {
+                                "val_loss": val_nll,
+                            },
+                            step=global_step,
                         )
                     model.train()
 
@@ -1061,12 +1092,16 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
 
             if global_step >= cfg.max_steps:
                 break
-
     model.eval()
     test_nll, test_bpb = evaluate(model, test_loader, device, "bf16")
     if is_main_process():
         log_if_main(f"[final test] nll={test_nll:.4f}  bpb={test_bpb:.4f}")
-
+        wandb.log(
+            {
+                "test_loss": test_nll,
+            },
+            step=global_step,
+        )
     ddp_cleanup()
 
 
@@ -1114,6 +1149,24 @@ def parse_args() -> Config:
         default=Config.max_steps,
         help="Number of optimizer steps.",
     )
+    p.add_argument(
+        "--log_interval",
+        type=int,
+        default=Config.log_interval,
+        help="Number of optimizer steps between logs.",
+    )
+    p.add_argument(
+        "--eval_interval",
+        type=int,
+        default=Config.eval_interval,
+        help="Number of optimizer steps between evaluations.",
+    )
+    p.add_argument(
+        "--ckpt_interval",
+        type=int,
+        default=Config.ckpt_interval,
+        help="Number of optimizer steps between checkpoints.",
+    )
     p.add_argument("--lr", type=float, default=Config.lr, help="Peak learning rate.")
     p.add_argument(
         "--warmup_steps",
@@ -1129,6 +1182,9 @@ def parse_args() -> Config:
     )
     p.add_argument(
         "--resume_path", type=str, default=None, help="Path to a checkpoint to resume."
+    )
+    p.add_argument(
+        "--run_id", type=str, default=None, help="Wandb run ID to resume."
     )
     p.add_argument(
         "--amp_dtype",
@@ -1197,10 +1253,14 @@ def parse_args() -> Config:
         micro_batch_size=args.micro_batch_size,
         grad_accum_steps=args.grad_accum_steps,
         max_steps=args.max_steps,
+        log_interval=args.log_interval,
+        eval_interval=args.eval_interval,
+        ckpt_interval=args.ckpt_interval,
         lr=args.lr,
         warmup_steps=args.warmup_steps,
         dropout=args.dropout,
         resume_path=args.resume_path,
+        run_id=args.run_id,
         amp_dtype=args.amp_dtype,
         seed=args.seed,
         num_blocks=args.num_blocks,
