@@ -78,6 +78,30 @@ class PitchToken(Enum):
     SPEED_IS_104 = auto()
     SPEED_IS_105 = auto()
     SPEED_IS_GT105 = auto()
+    SPIN_RATE_IS_LT750 = auto()
+    SPIN_RATE_IS_750_1000 = auto()
+    SPIN_RATE_IS_1000_1250 = auto()
+    SPIN_RATE_IS_1250_1500 = auto()
+    SPIN_RATE_IS_1500_1750 = auto()
+    SPIN_RATE_IS_1750_2000 = auto()
+    SPIN_RATE_IS_2000_2250 = auto()
+    SPIN_RATE_IS_2250_2500 = auto()
+    SPIN_RATE_IS_2500_2750 = auto()
+    SPIN_RATE_IS_2750_3000 = auto()
+    SPIN_RATE_IS_3000_3250 = auto()
+    SPIN_RATE_IS_GT3250 = auto()
+    SPIN_AXIS_IS_0_30 = auto()
+    SPIN_AXIS_IS_30_60 = auto()
+    SPIN_AXIS_IS_60_90 = auto()
+    SPIN_AXIS_IS_90_120 = auto()
+    SPIN_AXIS_IS_120_150 = auto()
+    SPIN_AXIS_IS_150_180 = auto()
+    SPIN_AXIS_IS_180_210 = auto()
+    SPIN_AXIS_IS_210_240 = auto()
+    SPIN_AXIS_IS_240_270 = auto()
+    SPIN_AXIS_IS_270_300 = auto()
+    SPIN_AXIS_IS_300_330 = auto()
+    SPIN_AXIS_IS_330_360 = auto()
     RELEASE_POS_X_IS_LTN4 = auto()
     RELEASE_POS_X_IS_N4_N375 = auto()
     RELEASE_POS_X_IS_N375_N350 = auto()
@@ -126,6 +150,62 @@ class PitchToken(Enum):
     RELEASE_POS_Z_IS_650_675 = auto()
     RELEASE_POS_Z_IS_675_7 = auto()
     RELEASE_POS_Z_IS_GT7 = auto()
+    RELEASE_EXTENSION_IS_LT5 = auto()
+    RELEASE_EXTENSION_IS_5_55 = auto()
+    RELEASE_EXTENSION_IS_55_6 = auto()
+    RELEASE_EXTENSION_IS_6_65 = auto()
+    RELEASE_EXTENSION_IS_65_7 = auto()
+    RELEASE_EXTENSION_IS_7_75 = auto()
+    RELEASE_EXTENSION_IS_GT75 = auto()
+    VX0_IS_LTN15 = auto()
+    VX0_IS_N15_N10 = auto()
+    VX0_IS_N10_N5 = auto()
+    VX0_IS_N5_0 = auto()
+    VX0_IS_0_5 = auto()
+    VX0_IS_5_10 = auto()
+    VX0_IS_10_15 = auto()
+    VX0_IS_GT15 = auto()
+    VY0_IS_LTN150 = auto()
+    VY0_IS_N150_N140 = auto()
+    VY0_IS_N140_N130 = auto()
+    VY0_IS_N130_N120 = auto()
+    VY0_IS_N120_N110 = auto()
+    VY0_IS_N110_N100 = auto()
+    VY0_IS_GTN100 = auto()
+    VZ0_IS_LTN10 = auto()
+    VZ0_IS_N10_N5 = auto()
+    VZ0_IS_N5_0 = auto()
+    VZ0_IS_0_5 = auto()
+    VZ0_IS_5_10 = auto()
+    VZ0_IS_10_15 = auto()
+    VZ0_IS_GT15 = auto()
+    AX_IS_LTN25 = auto()
+    AX_IS_N25_N20 = auto()
+    AX_IS_N20_N15 = auto()
+    AX_IS_N15_N10 = auto()
+    AX_IS_N10_N5 = auto()
+    AX_IS_N5_0 = auto()
+    AX_IS_0_5 = auto()
+    AX_IS_5_10 = auto()
+    AX_IS_10_15 = auto()
+    AX_IS_15_20 = auto()
+    AX_IS_20_25 = auto()
+    AX_IS_GT25 = auto()
+    AY_IS_LT15 = auto()
+    AY_IS_15_20 = auto()
+    AY_IS_20_25 = auto()
+    AY_IS_25_30 = auto()
+    AY_IS_30_35 = auto()
+    AY_IS_35_40 = auto()
+    AY_IS_GT40 = auto()
+    AZ_IS_LTN45 = auto()
+    AZ_IS_N45_N40 = auto()
+    AZ_IS_N40_N35 = auto()
+    AZ_IS_N35_N30 = auto()
+    AZ_IS_N30_N25 = auto()
+    AZ_IS_N25_N20 = auto()
+    AZ_IS_N20_N15 = auto()
+    AZ_IS_GTN15 = auto()
     PLATE_POS_X_IS_LTN2 = auto()
     PLATE_POS_X_IS_N2_N175 = auto()
     PLATE_POS_X_IS_N175_N150 = auto()
@@ -208,6 +288,20 @@ class PitchContext(BaseModel):
     pitch_number: int
     number_through_order: int
     game_date: str
+    game_park_id: int
+    fielder_2_id: int
+    fielder_3_id: int
+    fielder_4_id: int
+    fielder_5_id: int
+    fielder_6_id: int
+    fielder_7_id: int
+    fielder_8_id: int
+    fielder_9_id: int
+    batter_days_since_prev_game: int
+    pitcher_days_since_prev_game: int
+    umpire_id: int
+    strike_zone_top: float
+    strike_zone_bottom: float
 
     def to_tensor(self) -> torch.Tensor:
         """
@@ -234,6 +328,20 @@ class PitchContext(BaseModel):
             self.pitch_number,
             self.number_through_order,
             game_year,
+            self.game_park_id,
+            self.fielder_2_id,
+            self.fielder_3_id,
+            self.fielder_4_id,
+            self.fielder_5_id,
+            self.fielder_6_id,
+            self.fielder_7_id,
+            self.fielder_8_id,
+            self.fielder_9_id,
+            self.batter_days_since_prev_game,
+            self.pitcher_days_since_prev_game,
+            self.umpire_id,
+            self.strike_zone_top,
+            self.strike_zone_bottom,
         ])
 
         return tensor

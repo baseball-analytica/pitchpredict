@@ -2,6 +2,7 @@
 # Copyright (c) 2025 Addison Kline
 
 import logging
+from dataclasses import dataclass
 
 import pandas as pd
 from pandas._libs.missing import NAType
@@ -14,6 +15,33 @@ from pitchpredict.backend.fetching import get_all_pitches
 from pitchpredict.backend.algs.deep.types import PitchToken, PitchContext
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PitchDatasetStats:
+    total_pitches: int = 0
+    session_starts: int = 0
+    session_ends: int = 0
+    plate_appearance_starts: int = 0
+    plate_appearance_ends: int = 0
+
+    @property
+    def sessions(self) -> int:
+        return self.session_starts
+
+    @property
+    def plate_appearances(self) -> int:
+        return self.plate_appearance_starts
+
+    def validate(self) -> None:
+        if self.session_starts != self.session_ends:
+            raise ValueError(
+                f"mismatched session counts: {self.session_starts} starts vs {self.session_ends} ends"
+            )
+        if self.plate_appearance_starts != self.plate_appearance_ends:
+            raise ValueError(
+                f"mismatched plate appearance counts: {self.plate_appearance_starts} starts vs {self.plate_appearance_ends} ends"
+            )
 
 async def build_deep_model(
     date_start: str,
@@ -45,7 +73,13 @@ async def build_deep_model(
     pitches = _clean_pitch_rows(pitches)
     pitches = _sort_pitches_by_session(pitches)
 
-    pitch_tokens, pitch_contexts = await _build_pitch_tokens_and_contexts(pitches, dataset_log_interval)
+    pitch_tokens, pitch_contexts, dataset_stats = await _build_pitch_tokens_and_contexts(pitches, dataset_log_interval)
+    logger.info(
+        "dataset includes %d sessions and %d plate appearances from %d pitch rows",
+        dataset_stats.sessions,
+        dataset_stats.plate_appearances,
+        dataset_stats.total_pitches,
+    )
 
     pitch_dataset = _build_pitch_dataset(
         pitch_tokens=pitch_tokens,
@@ -149,7 +183,7 @@ async def build_deep_model_from_dataset(
 async def _build_pitch_tokens_and_contexts(
     pitches: pd.DataFrame,
     dataset_log_interval: int = 1000,
-) -> tuple[list[PitchToken], list[PitchContext]]:
+) -> tuple[list[PitchToken], list[PitchContext], PitchDatasetStats]:
     """
     Build the pitch tokens and contexts from the given pitches.
     """
@@ -165,6 +199,11 @@ async def _build_pitch_tokens_and_contexts(
 
     pitch_tokens = []
     pitch_contexts = []
+    stats = PitchDatasetStats()
+    current_session: tuple[int, int] | None = None
+    last_pa_key: tuple[int, int] | None = None
+    last_pa_closed = True
+    last_context: PitchContext | None = None
 
     pitches = pitches.sort_values(by=["game_pk", "at_bat_number", "pitch_number"])
 
@@ -174,15 +213,31 @@ async def _build_pitch_tokens_and_contexts(
         if not row["pitch_type"]:
             continue
 
+        stats.total_pitches += 1
+
+        session_key = (int(row["game_pk"]), int(row["pitcher"]))
+        if session_key != current_session:
+            if current_session is not None:
+                stats.session_ends += 1
+            stats.session_starts += 1
+            current_session = session_key
+
         tokens_this_pitch: list[PitchToken] = []
+
+        pa_key = (int(row["game_pk"]), int(row["at_bat_number"]))
+        if pa_key != last_pa_key:
+            if last_pa_key is not None and not last_pa_closed and last_context is not None:
+                pitch_tokens.append(PitchToken.PA_END)
+                pitch_contexts.append(last_context)
+                stats.plate_appearance_ends += 1
+                last_pa_closed = True
+            stats.plate_appearance_starts += 1
+            tokens_this_pitch.append(PitchToken.PA_START)
+            last_pa_closed = False
 
         raw_event = row["events"]
         event = raw_event if isinstance(raw_event, str) else ""
         end_of_pa = bool(event)
-
-        if row["pitch_number"] == 1:
-            token_pa_start = PitchToken.PA_START
-            tokens_this_pitch.append(token_pa_start)
 
         tokens_this_pitch.append(PitchToken.PITCH)
 
@@ -240,6 +295,26 @@ async def _build_pitch_tokens_and_contexts(
             token = _offset_token(PitchToken.SPEED_IS_65, offset, max_offset=40)
             tokens_this_pitch.append(token)
 
+        spin_rate = round(row["release_spin_rate"])
+        if spin_rate < 750:
+            tokens_this_pitch.append(PitchToken.SPIN_RATE_IS_LT750)
+        elif spin_rate > 3250:
+            tokens_this_pitch.append(PitchToken.SPIN_RATE_IS_GT3250)
+        else:
+            offset = _bin_index(spin_rate, base=750.0, step=250.0, max_offset=9)
+            token = _offset_token(PitchToken.SPIN_RATE_IS_750_1000, offset, max_offset=9)
+            tokens_this_pitch.append(token)
+
+        spin_axis = round(row["spin_axis"])
+        if spin_axis < 0:
+            raise ValueError(f"spin axis out of range: {spin_axis}")
+        elif spin_axis > 360:
+            raise ValueError(f"spin axis out of range: {spin_axis}")
+        else:
+            offset = min(11, int(spin_axis // 30))
+            token = _offset_token(PitchToken.SPIN_AXIS_IS_0_30, offset, max_offset=11)
+            tokens_this_pitch.append(token)
+
         release_pos_x = round(row["release_pos_x"], 2)
         if release_pos_x < -4:
             tokens_this_pitch.append(PitchToken.RELEASE_POS_X_IS_LTN4)
@@ -258,6 +333,76 @@ async def _build_pitch_tokens_and_contexts(
         else:
             offset = _bin_index(release_pos_z, base=4.0, step=0.25, max_offset=11)
             token = _offset_token(PitchToken.RELEASE_POS_Z_IS_4_425, offset, max_offset=11)
+            tokens_this_pitch.append(token)
+
+        vx0 = round(row["vx0"], 2)
+        if vx0 < -15.0:
+            tokens_this_pitch.append(PitchToken.VX0_IS_LTN15)
+        elif vx0 > 15.0:
+            tokens_this_pitch.append(PitchToken.VX0_IS_GT15)
+        else:
+            offset = _bin_index(vx0, base=-15.0, step=5.0, max_offset=5)
+            token = _offset_token(PitchToken.VX0_IS_N15_N10, offset, max_offset=5)
+            tokens_this_pitch.append(token)
+
+        vy0 = round(row["vy0"], 2)
+        if vy0 < -150.0:
+            tokens_this_pitch.append(PitchToken.VY0_IS_LTN150)
+        elif vy0 > -100.0:
+            tokens_this_pitch.append(PitchToken.VY0_IS_GTN100)
+        else:
+            offset = _bin_index(vy0, base=-150.0, step=10.0, max_offset=4)
+            token = _offset_token(PitchToken.VY0_IS_N150_N140, offset, max_offset=4)
+            tokens_this_pitch.append(token)
+
+        vz0 = round(row["vz0"], 2)
+        if vz0 < -10.0:
+            tokens_this_pitch.append(PitchToken.VZ0_IS_LTN10)
+        elif vz0 > 15.0:
+            tokens_this_pitch.append(PitchToken.VZ0_IS_GT15)
+        else:
+            offset = _bin_index(vz0, base=-10.0, step=5.0, max_offset=4)
+            token = _offset_token(PitchToken.VZ0_IS_N10_N5, offset, max_offset=4)
+            tokens_this_pitch.append(token)
+
+        ax = round(row["ax"], 2)
+        if ax < -25.0:
+            tokens_this_pitch.append(PitchToken.AX_IS_LTN25)
+        elif ax > 25.0:
+            tokens_this_pitch.append(PitchToken.AX_IS_GT25)
+        else:
+            offset = _bin_index(ax, base=-25.0, step=5.0, max_offset=9)
+            token = _offset_token(PitchToken.AX_IS_N25_N20, offset, max_offset=9)
+            tokens_this_pitch.append(token)
+
+        ay = round(row["ay"], 2)
+        if ay < 15.0:
+            tokens_this_pitch.append(PitchToken.AY_IS_LT15)
+        elif ay > 40.0:
+            tokens_this_pitch.append(PitchToken.AY_IS_GT40)
+        else:
+            offset = _bin_index(ay, base=15.0, step=5.0, max_offset=4)
+            token = _offset_token(PitchToken.AY_IS_15_20, offset, max_offset=4)
+            tokens_this_pitch.append(token)
+
+        az = round(row["az"], 2)
+        if az < -45.0:
+            tokens_this_pitch.append(PitchToken.AZ_IS_LTN45)
+        elif az > -15.0:
+            tokens_this_pitch.append(PitchToken.AZ_IS_GTN15)
+        else:
+            offset = _bin_index(az, base=-45.0, step=5.0, max_offset=5)
+            token = _offset_token(PitchToken.AZ_IS_N45_N40, offset, max_offset=5)
+            tokens_this_pitch.append(token)
+
+        release_extension = round(row["release_extension"], 2)
+        if release_extension < 5.0:
+            tokens_this_pitch.append(PitchToken.RELEASE_EXTENSION_IS_LT5)
+        elif release_extension > 7.5:
+            tokens_this_pitch.append(PitchToken.RELEASE_EXTENSION_IS_GT75)
+        else:
+            offset = _bin_index(release_extension, base=5.0, step=0.5, max_offset=4)
+            token = _offset_token(PitchToken.RELEASE_EXTENSION_IS_5_55, offset, max_offset=4)
             tokens_this_pitch.append(token)
 
         plate_pos_x = round(row["plate_x"], 2)
@@ -324,6 +469,8 @@ async def _build_pitch_tokens_and_contexts(
         
         if end_of_pa:
             tokens_this_pitch.append(PitchToken.PA_END)
+            stats.plate_appearance_ends += 1
+            last_pa_closed = True
 
 
         runner_on_first = not isinstance(row["on_1b"], NAType) or False
@@ -368,11 +515,43 @@ async def _build_pitch_tokens_and_contexts(
             pitch_number=row["pitch_number"],
             number_through_order=row["n_thruorder_pitcher"],
             game_date=game_date,
+            game_park_id=row["game_pk"],
+            fielder_2_id=row["fielder_2"],
+            fielder_3_id=row["fielder_3"],
+            fielder_4_id=row["fielder_4"],
+            fielder_5_id=row["fielder_5"],
+            fielder_6_id=row["fielder_6"],
+            fielder_7_id=row["fielder_7"],
+            fielder_8_id=row["fielder_8"],
+            fielder_9_id=row["fielder_9"],
+            batter_days_since_prev_game=row["batter_days_since_prev_game"],
+            pitcher_days_since_prev_game=row["pitcher_days_since_prev_game"],
+            umpire_id=row["umpire"],
+            strike_zone_top=row["sz_top"],
+            strike_zone_bottom=row["sz_bot"],
         )
         pitch_tokens.extend(tokens_this_pitch)
         pitch_contexts.extend([pitch_context] * len(tokens_this_pitch))
+        last_context = pitch_context
+        last_pa_key = pa_key
+
+    if current_session is not None:
+        stats.session_ends += 1
+
+    if not last_pa_closed and last_context is not None:
+        pitch_tokens.append(PitchToken.PA_END)
+        pitch_contexts.append(last_context)
+        stats.plate_appearance_ends += 1
+
+    stats.validate()
+    logger.info(
+        "tokenized %d pitches across %d sessions and %d plate appearances",
+        stats.total_pitches,
+        stats.sessions,
+        stats.plate_appearances,
+    )
     logger.info("_build_pitch_tokens_and_contexts completed successfully")
-    return pitch_tokens, pitch_contexts
+    return pitch_tokens, pitch_contexts, stats
 
 
 def _build_pitch_dataset(
@@ -438,14 +617,36 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
     """
     logger.debug("_clean_pitch_rows called")
 
+    pitches = pitches.copy()
+
     required_columns = [
         "pitch_type",
         "release_speed",
         "release_pos_x",
         "release_pos_z",
+        "release_spin_rate",
+        "spin_axis",
         "plate_x",
         "plate_z",
+        "vx0",
+        "vy0",
+        "vz0",
+        "ax",
+        "ay",
+        "az",
+        "release_extension",
         "game_pk",
+        "fielder_2",
+        "fielder_3",
+        "fielder_4",
+        "fielder_5",
+        "fielder_6",
+        "fielder_7",
+        "fielder_8",
+        "fielder_9",
+        "umpire",
+        "batter_days_since_prev_game",
+        "pitcher_days_since_prev_game",
         "at_bat_number",
         "pitch_number",
         "p_throws",
@@ -461,8 +662,38 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
         "game_date",
         "age_pit",
         "age_bat",
+        "sz_top",
+        "sz_bot",
     ]
-    cleaned = pitches.dropna(subset=required_columns)
+    missing = [col for col in required_columns if col not in pitches.columns]
+    if missing:
+        raise ValueError(f"missing required columns for cleaning: {missing}")
+
+    fill_zero_int_columns = [
+        "fielder_2",
+        "fielder_3",
+        "fielder_4",
+        "fielder_5",
+        "fielder_6",
+        "fielder_7",
+        "fielder_8",
+        "fielder_9",
+        "umpire",
+        "batter_days_since_prev_game",
+        "pitcher_days_since_prev_game",
+    ]
+    fill_zero_float_columns = ["sz_top", "sz_bot"]
+
+    essential_columns = [
+        col for col in required_columns if col not in fill_zero_int_columns + fill_zero_float_columns
+    ]
+    cleaned = pitches.dropna(subset=essential_columns).copy()
+
+    for col in fill_zero_int_columns:
+        cleaned[col] = cleaned[col].fillna(0).astype(int)
+
+    for col in fill_zero_float_columns:
+        cleaned[col] = cleaned[col].fillna(0.0)
 
     logger.debug("_clean_pitch_rows completed successfully")
     return cleaned.reset_index(drop=True)
