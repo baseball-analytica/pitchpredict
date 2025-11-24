@@ -540,9 +540,9 @@ async def _build_pitch_tokens_and_contexts(
             pitch_contexts.extend([pitch_context] * len(tokens_this_pitch))
             last_context = pitch_context
             last_pa_key = pa_key
-         except Exception as e:
-             logger.error(f"error tokenizing pitch {i}: {e}")
-             continue
+        except Exception as e:
+            logger.error(f"error tokenizing pitch {i}: {e}")
+            continue
 
     if current_session is not None:
         stats.session_ends += 1
