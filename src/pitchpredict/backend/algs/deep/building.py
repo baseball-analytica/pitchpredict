@@ -95,7 +95,7 @@ async def build_deep_model(
         raise ValueError("data_only is True, so we don't need to train the model")
     train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
 
-    input_dim = pitch_dataset.feature_dim
+    input_dim = pitch_dataset.feature_dim # type: ignore[attr-defined]
     dataset_num_classes = pitch_dataset.num_classes
     effective_num_classes = num_classes or vocab_size or dataset_num_classes
     if effective_num_classes < dataset_num_classes:
@@ -153,7 +153,7 @@ async def build_deep_model_from_dataset(
     pitch_dataset = PitchDataset.load(tokens_path, contexts_path, seed=0, pad_id=0, dataset_log_interval=10000)
     train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
 
-    input_dim = pitch_dataset.feature_dim
+    input_dim = pitch_dataset.feature_dim # type: ignore[attr-defined]
     num_classes = pitch_dataset.num_classes
 
     model = DeepPitcherModel(
@@ -244,8 +244,6 @@ async def _build_pitch_tokens_and_contexts(
             raw_event = row["events"]
             event = raw_event if isinstance(raw_event, str) else ""
             end_of_pa = bool(event)
-
-            tokens_this_pitch.append(PitchToken.PITCH)
 
             match row["pitch_type"]:
                 case "CH":

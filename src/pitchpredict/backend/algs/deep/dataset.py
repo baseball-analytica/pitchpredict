@@ -25,6 +25,20 @@ class PackedPitchChunk(NamedTuple): # keep parallel with nn._CONTEXT_FIELD_SPECS
     pitch_number: torch.FloatTensor
     number_through_order: torch.IntTensor
     game_date: torch.FloatTensor
+    game_park_id: torch.IntTensor
+    fielder_2_id: torch.IntTensor
+    fielder_3_id: torch.IntTensor
+    fielder_4_id: torch.IntTensor
+    fielder_5_id: torch.IntTensor
+    fielder_6_id: torch.IntTensor
+    fielder_7_id: torch.IntTensor
+    fielder_8_id: torch.IntTensor
+    fielder_9_id: torch.IntTensor
+    batter_days_since_prev_game: torch.IntTensor
+    pitcher_days_since_prev_game: torch.IntTensor
+    umpire_id: torch.IntTensor
+    strike_zone_top: torch.FloatTensor
+    strike_zone_bottom: torch.FloatTensor
 
 class PackedPitchContext(NamedTuple):
     pitcher_id: torch.LongTensor
@@ -43,6 +57,20 @@ class PackedPitchContext(NamedTuple):
     pitch_number: torch.FloatTensor
     number_through_order: torch.IntTensor
     game_date: torch.FloatTensor
+    game_park_id: torch.IntTensor
+    fielder_2_id: torch.IntTensor
+    fielder_3_id: torch.IntTensor
+    fielder_4_id: torch.IntTensor
+    fielder_5_id: torch.IntTensor
+    fielder_6_id: torch.IntTensor
+    fielder_7_id: torch.IntTensor
+    fielder_8_id: torch.IntTensor
+    fielder_9_id: torch.IntTensor
+    batter_days_since_prev_game: torch.IntTensor
+    pitcher_days_since_prev_game: torch.IntTensor
+    umpire_id: torch.IntTensor
+    strike_zone_top: torch.FloatTensor
+    strike_zone_bottom: torch.FloatTensor
 
 def chunk_to_context(chunk: PackedPitchChunk, device: torch.device) -> PackedPitchContext:
     """
@@ -62,6 +90,18 @@ def chunk_to_context(chunk: PackedPitchChunk, device: torch.device) -> PackedPit
         bases_state=chunk.bases_state.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         inning=chunk.inning.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         number_through_order=chunk.number_through_order.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        game_park_id=chunk.game_park_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        fielder_2_id=chunk.fielder_2_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        fielder_3_id=chunk.fielder_3_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        fielder_4_id=chunk.fielder_4_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        fielder_5_id=chunk.fielder_5_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        fielder_6_id=chunk.fielder_6_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        fielder_7_id=chunk.fielder_7_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        fielder_8_id=chunk.fielder_8_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        fielder_9_id=chunk.fielder_9_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        batter_days_since_prev_game=chunk.batter_days_since_prev_game.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        pitcher_days_since_prev_game=chunk.pitcher_days_since_prev_game.to(device, dtype=torch.int, non_blocking=True), # type: ignore
+        umpire_id=chunk.umpire_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
 
         # Continuous / Stats (Must be Float for Linear layers)
         pitcher_age=chunk.pitcher_age.to(device, dtype=torch.float, non_blocking=True), # type: ignore
@@ -70,6 +110,8 @@ def chunk_to_context(chunk: PackedPitchChunk, device: torch.device) -> PackedPit
         score_fld=chunk.score_fld.to(device, dtype=torch.float, non_blocking=True), # type: ignore
         pitch_number=chunk.pitch_number.to(device, dtype=torch.float, non_blocking=True), # type: ignore
         game_date=chunk.game_date.to(device, dtype=torch.float, non_blocking=True), # type: ignore
+        strike_zone_top=chunk.strike_zone_top.to(device, dtype=torch.float, non_blocking=True), # type: ignore
+        strike_zone_bottom=chunk.strike_zone_bottom.to(device, dtype=torch.float, non_blocking=True), # type: ignore
     )
 
 
@@ -131,4 +173,18 @@ class PackedPitchDataset(Dataset):
             pitch_number=torch.from_numpy(self.contexts['pitch_number'][start:end-1].astype(np.float32)), # type: ignore
             number_through_order=torch.from_numpy(self.contexts['number_through_order'][start:end-1].astype(np.int32)), # type: ignore
             game_date=torch.from_numpy(self.contexts['game_date'][start:end-1].astype(np.float32)), # type: ignore
+            game_park_id=torch.from_numpy(self.contexts['game_park_id'][start:end-1].astype(np.int32)), # type: ignore
+            fielder_2_id=torch.from_numpy(self.contexts['fielder_2_id'][start:end-1].astype(np.int32)), # type: ignore
+            fielder_3_id=torch.from_numpy(self.contexts['fielder_3_id'][start:end-1].astype(np.int32)), # type: ignore
+            fielder_4_id=torch.from_numpy(self.contexts['fielder_4_id'][start:end-1].astype(np.int32)), # type: ignore
+            fielder_5_id=torch.from_numpy(self.contexts['fielder_5_id'][start:end-1].astype(np.int32)), # type: ignore
+            fielder_6_id=torch.from_numpy(self.contexts['fielder_6_id'][start:end-1].astype(np.int32)), # type: ignore
+            fielder_7_id=torch.from_numpy(self.contexts['fielder_7_id'][start:end-1].astype(np.int32)), # type: ignore
+            fielder_8_id=torch.from_numpy(self.contexts['fielder_8_id'][start:end-1].astype(np.int32)), # type: ignore
+            fielder_9_id=torch.from_numpy(self.contexts['fielder_9_id'][start:end-1].astype(np.int32)), # type: ignore
+            batter_days_since_prev_game=torch.from_numpy(self.contexts['batter_days_since_prev_game'][start:end-1].astype(np.int32)), # type: ignore
+            pitcher_days_since_prev_game=torch.from_numpy(self.contexts['pitcher_days_since_prev_game'][start:end-1].astype(np.int32)), # type: ignore
+            umpire_id=torch.from_numpy(self.contexts['umpire_id'][start:end-1].astype(np.int32)), # type: ignore
+            strike_zone_top=torch.from_numpy(self.contexts['strike_zone_top'][start:end-1].astype(np.float32)), # type: ignore
+            strike_zone_bottom=torch.from_numpy(self.contexts['strike_zone_bottom'][start:end-1].astype(np.float32)), # type: ignore
         )

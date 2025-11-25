@@ -31,6 +31,7 @@ async def main():
         bidirectional=False,
         dropout=0.1,
         device=torch.device("cuda:5"),
+        model_path="/raid/kline/pitchpredict/.pitchpredict_models/deep_pitch.pth",
         tokens_path="/raid/kline/pitchpredict/.pitchpredict_data/pitch_seq.bin",
         contexts_path="/raid/kline/pitchpredict/.pitchpredict_data/pitch_context",
         data_only=DATA_ONLY,

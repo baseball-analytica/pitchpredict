@@ -106,6 +106,38 @@ def _encode_pitch_number(value: int) -> float:
 def _decode_pitch_number(value: Any) -> float:
     return value * 100.0
 
+def _encode_strike_zone_top(value: float) -> float:
+    if not value or value < 0.0:
+        return 0.0
+
+    mean_top = 3.4
+    std_dev = 0.2
+    return (value - mean_top) / std_dev # z-score
+
+def _decode_strike_zone_top(value: Any) -> float:
+    if value == 0.0:
+        return 0.0
+
+    mean_top = 3.4
+    std_dev = 0.2
+    return value * std_dev + mean_top
+
+def _encode_strike_zone_bottom(value: float) -> float:
+    if not value or value < 0.0:
+        return 0.0
+
+    mean_bottom = 1.6
+    std_dev = 0.1
+    return (value - mean_bottom) / std_dev # z-score
+
+def _decode_strike_zone_bottom(value: Any) -> float:
+    if value == 0.0:
+        return 0.0
+
+    mean_bottom = 1.6
+    std_dev = 0.1
+    return value * std_dev + mean_bottom
+
 _CONTEXT_FIELD_SPECS: dict[str, _ContextFieldSpec] = {
     "pitcher_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("pitcher_id"), _encode_int, _decode_int),
     "batter_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("batter_id"), _encode_int, _decode_int),
@@ -123,6 +155,20 @@ _CONTEXT_FIELD_SPECS: dict[str, _ContextFieldSpec] = {
     "pitch_number": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("pitch_number"), _encode_pitch_number, _decode_pitch_number),
     "number_through_order": _ContextFieldSpec(INT32_DTYPE, attrgetter("number_through_order"), _encode_int, _decode_int),
     "game_date": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("game_date"), _encode_game_date, _decode_game_date),
+    "game_park_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("game_park_id"), _encode_int, _decode_int),
+    "fielder_2_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_2_id"), _encode_int, _decode_int),
+    "fielder_3_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_3_id"), _encode_int, _decode_int),
+    "fielder_4_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_4_id"), _encode_int, _decode_int),
+    "fielder_5_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_5_id"), _encode_int, _decode_int),
+    "fielder_6_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_6_id"), _encode_int, _decode_int),
+    "fielder_7_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_7_id"), _encode_int, _decode_int),
+    "fielder_8_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_8_id"), _encode_int, _decode_int),
+    "fielder_9_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_9_id"), _encode_int, _decode_int),
+    "batter_days_since_prev_game": _ContextFieldSpec(INT32_DTYPE, attrgetter("batter_days_since_prev_game"), _encode_int, _decode_int),
+    "pitcher_days_since_prev_game": _ContextFieldSpec(INT32_DTYPE, attrgetter("pitcher_days_since_prev_game"), _encode_int, _decode_int),
+    "umpire_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("umpire_id"), _encode_int, _decode_int),
+    "strike_zone_top": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("strike_zone_top"), _encode_strike_zone_top, _decode_strike_zone_top),
+    "strike_zone_bottom": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("strike_zone_bottom"), _encode_strike_zone_bottom, _decode_strike_zone_bottom),
 } # keep parallel with dataset.PackedPitchChunk but without x and y
 
 
@@ -164,12 +210,52 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
             pitchers: set[int] = set()
         if field_name == "batter_id":
             batters: set[int] = set()
+        if field_name == "game_park_id":
+            game_parks: set[int] = set()
+        if field_name == "fielder_2_id":
+            fielder_2s: set[int] = set()
+        if field_name == "fielder_3_id":
+            fielder_3s: set[int] = set()
+        if field_name == "fielder_4_id":
+            fielder_4s: set[int] = set()
+        if field_name == "fielder_5_id":
+            fielder_5s: set[int] = set()
+        if field_name == "fielder_6_id":
+            fielder_6s: set[int] = set()
+        if field_name == "fielder_7_id":
+            fielder_7s: set[int] = set()
+        if field_name == "fielder_8_id":
+            fielder_8s: set[int] = set()
+        if field_name == "fielder_9_id":
+            fielder_9s: set[int] = set()
+        if field_name == "umpire_id":
+            umpires: set[int] = set()
         for idx, context in enumerate(contexts):
             item = spec.getter(context)
             if field_name == "pitcher_id":
                 pitchers.add(item)
             if field_name == "batter_id":
                 batters.add(item)
+            if field_name == "game_park_id":
+                game_parks.add(item)
+            if field_name == "fielder_2_id":
+                fielder_2s.add(item)
+            if field_name == "fielder_3_id":
+                fielder_3s.add(item)
+            if field_name == "fielder_4_id":
+                fielder_4s.add(item)
+            if field_name == "fielder_5_id":
+                fielder_5s.add(item)
+            if field_name == "fielder_6_id":
+                fielder_6s.add(item)
+            if field_name == "fielder_7_id":
+                fielder_7s.add(item)
+            if field_name == "fielder_8_id":
+                fielder_8s.add(item)
+            if field_name == "fielder_9_id":
+                fielder_9s.add(item)
+            if field_name == "umpire_id":
+                umpires.add(item)
             array[idx] = spec.encode(item)
         array.tofile(path)
         saved_paths.append(path)
@@ -177,6 +263,27 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
             logger.info(f"Number of pitchers: {len(pitchers)}")
         if field_name == "batter_id":
             logger.info(f"Number of batters: {len(batters)}")
+        if field_name == "game_park_id":
+            logger.info(f"Number of game parks: {len(game_parks)}")
+        if field_name == "fielder_2_id":
+            logger.info(f"Number of fielder 2s: {len(fielder_2s)}")
+        if field_name == "fielder_3_id":
+            logger.info(f"Number of fielder 3s: {len(fielder_3s)}")
+        if field_name == "fielder_4_id":
+            logger.info(f"Number of fielder 4s: {len(fielder_4s)}")
+        if field_name == "fielder_5_id":
+            logger.info(f"Number of fielder 5s: {len(fielder_5s)}")
+        if field_name == "fielder_6_id":
+            logger.info(f"Number of fielder 6s: {len(fielder_6s)}")
+        if field_name == "fielder_7_id":
+            logger.info(f"Number of fielder 7s: {len(fielder_7s)}")
+        if field_name == "fielder_8_id":
+            logger.info(f"Number of fielder 8s: {len(fielder_8s)}")
+        if field_name == "fielder_9_id":
+            logger.info(f"Number of fielder 9s: {len(fielder_9s)}")
+        if field_name == "umpire_id":
+            logger.info(f"Number of umpires: {len(umpires)}")
+            
     return saved_paths
 
 
