@@ -1,9 +1,0 @@
-[
-    {
-        "start_date": "2015-04-01",
-        "end_date": "today",
-        "fuzzy_player_lookup": true,
-        "pitch_sample_pctg": 0.005,
-        "generate_output_files": true
-    }
-]
