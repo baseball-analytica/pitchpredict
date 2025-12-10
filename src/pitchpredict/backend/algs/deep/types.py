@@ -270,6 +270,153 @@ class PitchToken(Enum):
     RESULT_IS_AUTOMATIC_STRIKE = auto()
 
 
+class TokenCategory(Enum):
+    """
+    Categories for grouping PitchToken values by their semantic role.
+    """
+    SESSION_START = auto()
+    SESSION_END = auto()
+    PA_START = auto()
+    PA_END = auto()
+    PITCH_TYPE = auto()
+    SPEED = auto()
+    SPIN_RATE = auto()
+    SPIN_AXIS = auto()
+    RELEASE_POS_X = auto()
+    RELEASE_POS_Z = auto()
+    VX0 = auto()
+    VY0 = auto()
+    VZ0 = auto()
+    AX = auto()
+    AY = auto()
+    AZ = auto()
+    RELEASE_EXTENSION = auto()
+    PLATE_POS_X = auto()
+    PLATE_POS_Z = auto()
+    RESULT = auto()
+
+
+# Token range boundaries (inclusive) for category classification
+_TOKEN_RANGES: list[tuple[PitchToken, PitchToken, TokenCategory]] = [
+    (PitchToken.SESSION_START, PitchToken.SESSION_START, TokenCategory.SESSION_START),
+    (PitchToken.SESSION_END, PitchToken.SESSION_END, TokenCategory.SESSION_END),
+    (PitchToken.PA_START, PitchToken.PA_START, TokenCategory.PA_START),
+    (PitchToken.PA_END, PitchToken.PA_END, TokenCategory.PA_END),
+    (PitchToken.IS_CH, PitchToken.IS_AB, TokenCategory.PITCH_TYPE),
+    (PitchToken.SPEED_IS_LT65, PitchToken.SPEED_IS_GT105, TokenCategory.SPEED),
+    (PitchToken.SPIN_RATE_IS_LT750, PitchToken.SPIN_RATE_IS_GT3250, TokenCategory.SPIN_RATE),
+    (PitchToken.SPIN_AXIS_IS_0_30, PitchToken.SPIN_AXIS_IS_330_360, TokenCategory.SPIN_AXIS),
+    (PitchToken.RELEASE_POS_X_IS_LTN4, PitchToken.RELEASE_POS_X_IS_GT4, TokenCategory.RELEASE_POS_X),
+    (PitchToken.RELEASE_POS_Z_IS_LT4, PitchToken.RELEASE_POS_Z_IS_GT7, TokenCategory.RELEASE_POS_Z),
+    (PitchToken.RELEASE_EXTENSION_IS_LT5, PitchToken.RELEASE_EXTENSION_IS_GT75, TokenCategory.RELEASE_EXTENSION),
+    (PitchToken.VX0_IS_LTN15, PitchToken.VX0_IS_GT15, TokenCategory.VX0),
+    (PitchToken.VY0_IS_LTN150, PitchToken.VY0_IS_GTN100, TokenCategory.VY0),
+    (PitchToken.VZ0_IS_LTN10, PitchToken.VZ0_IS_GT15, TokenCategory.VZ0),
+    (PitchToken.AX_IS_LTN25, PitchToken.AX_IS_GT25, TokenCategory.AX),
+    (PitchToken.AY_IS_LT15, PitchToken.AY_IS_GT40, TokenCategory.AY),
+    (PitchToken.AZ_IS_LTN45, PitchToken.AZ_IS_GTN15, TokenCategory.AZ),
+    (PitchToken.PLATE_POS_X_IS_LTN2, PitchToken.PLATE_POS_X_IS_GT2, TokenCategory.PLATE_POS_X),
+    (PitchToken.PLATE_POS_Z_IS_LTN1, PitchToken.PLATE_POS_Z_IS_GT5, TokenCategory.PLATE_POS_Z),
+    (PitchToken.RESULT_IS_BALL, PitchToken.RESULT_IS_AUTOMATIC_STRIKE, TokenCategory.RESULT),
+]
+
+
+def get_category(token: PitchToken) -> TokenCategory:
+    """
+    Return the TokenCategory for a given PitchToken.
+    """
+    val = token.value
+    for start, end, category in _TOKEN_RANGES:
+        if start.value <= val <= end.value:
+            return category
+    raise ValueError(f"Unknown token: {token}")
+
+
+# Pre-computed cache of tokens per category for efficiency
+_CATEGORY_TOKENS: dict[TokenCategory, list[PitchToken]] = {}
+
+
+def _init_category_tokens() -> None:
+    """
+    Initialize the category tokens cache.
+    """
+    for start, end, category in _TOKEN_RANGES:
+        tokens = [PitchToken(v) for v in range(start.value, end.value + 1)]
+        _CATEGORY_TOKENS[category] = tokens
+
+
+_init_category_tokens()
+
+
+def get_tokens_in_category(category: TokenCategory) -> list[PitchToken]:
+    """
+    Return all PitchToken values belonging to a given category.
+    """
+    return _CATEGORY_TOKENS[category]
+
+
+# Grammar: maps each category to valid next token categories
+_NEXT_CATEGORY: dict[TokenCategory, list[TokenCategory]] = {
+    TokenCategory.SESSION_START: [TokenCategory.PA_START, TokenCategory.SESSION_END],
+    TokenCategory.PA_START: [TokenCategory.PITCH_TYPE],
+    TokenCategory.PITCH_TYPE: [TokenCategory.SPEED],
+    TokenCategory.SPEED: [TokenCategory.SPIN_RATE],
+    TokenCategory.SPIN_RATE: [TokenCategory.SPIN_AXIS],
+    TokenCategory.SPIN_AXIS: [TokenCategory.RELEASE_POS_X],
+    TokenCategory.RELEASE_POS_X: [TokenCategory.RELEASE_POS_Z],
+    TokenCategory.RELEASE_POS_Z: [TokenCategory.VX0],
+    TokenCategory.VX0: [TokenCategory.VY0],
+    TokenCategory.VY0: [TokenCategory.VZ0],
+    TokenCategory.VZ0: [TokenCategory.AX],
+    TokenCategory.AX: [TokenCategory.AY],
+    TokenCategory.AY: [TokenCategory.AZ],
+    TokenCategory.AZ: [TokenCategory.RELEASE_EXTENSION],
+    TokenCategory.RELEASE_EXTENSION: [TokenCategory.PLATE_POS_X],
+    TokenCategory.PLATE_POS_X: [TokenCategory.PLATE_POS_Z],
+    TokenCategory.PLATE_POS_Z: [TokenCategory.RESULT],
+    TokenCategory.RESULT: [TokenCategory.PA_END, TokenCategory.PITCH_TYPE],
+    TokenCategory.PA_END: [TokenCategory.PA_START, TokenCategory.SESSION_END],
+    TokenCategory.SESSION_END: [TokenCategory.SESSION_START],
+}
+
+
+# Pre-computed cache of valid next tokens for each token
+_VALID_NEXT_TOKENS: dict[PitchToken, list[PitchToken]] = {}
+
+
+def _init_valid_next_tokens() -> None:
+    """
+    Initialize the valid next tokens cache.
+    """
+    for token in PitchToken:
+        category = get_category(token)
+        next_categories = _NEXT_CATEGORY[category]
+        next_tokens: list[PitchToken] = []
+        for next_cat in next_categories:
+            next_tokens.extend(_CATEGORY_TOKENS[next_cat])
+        _VALID_NEXT_TOKENS[token] = next_tokens
+
+
+_init_valid_next_tokens()
+
+
+def valid_next_tokens(token: PitchToken) -> list[PitchToken]:
+    """
+    Return all grammatically valid next PitchToken values given a current token.
+
+    This implements the pitch sequence grammar where each pitch consists of
+    16 tokens in a fixed order (PITCH_TYPE -> SPEED -> ... -> RESULT),
+    bounded by structural tokens (SESSION_START/END, PA_START/END).
+
+    Args:
+        token: The current PitchToken in the sequence.
+
+    Returns:
+        A list of all valid next PitchToken values.
+    """
+    return _VALID_NEXT_TOKENS[token]
+
+
 class PitchContext(BaseModel):
     pitcher_id: int
     batter_id: int
