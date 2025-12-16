@@ -25,7 +25,6 @@ class PackedPitchChunk(NamedTuple): # keep parallel with nn._CONTEXT_FIELD_SPECS
     pitch_number: torch.FloatTensor
     number_through_order: torch.IntTensor
     game_date: torch.FloatTensor
-    game_park_id: torch.IntTensor
     fielder_2_id: torch.IntTensor
     fielder_3_id: torch.IntTensor
     fielder_4_id: torch.IntTensor
@@ -57,7 +56,6 @@ class PackedPitchContext(NamedTuple):
     pitch_number: torch.FloatTensor
     number_through_order: torch.IntTensor
     game_date: torch.FloatTensor
-    game_park_id: torch.IntTensor
     fielder_2_id: torch.IntTensor
     fielder_3_id: torch.IntTensor
     fielder_4_id: torch.IntTensor
@@ -90,7 +88,6 @@ def chunk_to_context(chunk: PackedPitchChunk, device: torch.device) -> PackedPit
         bases_state=chunk.bases_state.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         inning=chunk.inning.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         number_through_order=chunk.number_through_order.to(device, dtype=torch.int, non_blocking=True), # type: ignore
-        game_park_id=chunk.game_park_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         fielder_2_id=chunk.fielder_2_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         fielder_3_id=chunk.fielder_3_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         fielder_4_id=chunk.fielder_4_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
@@ -173,7 +170,6 @@ class PackedPitchDataset(Dataset):
             pitch_number=torch.from_numpy(self.contexts['pitch_number'][start:end-1].astype(np.float32)), # type: ignore
             number_through_order=torch.from_numpy(self.contexts['number_through_order'][start:end-1].astype(np.int32)), # type: ignore
             game_date=torch.from_numpy(self.contexts['game_date'][start:end-1].astype(np.float32)), # type: ignore
-            game_park_id=torch.from_numpy(self.contexts['game_park_id'][start:end-1].astype(np.int32)), # type: ignore
             fielder_2_id=torch.from_numpy(self.contexts['fielder_2_id'][start:end-1].astype(np.int32)), # type: ignore
             fielder_3_id=torch.from_numpy(self.contexts['fielder_3_id'][start:end-1].astype(np.int32)), # type: ignore
             fielder_4_id=torch.from_numpy(self.contexts['fielder_4_id'][start:end-1].astype(np.int32)), # type: ignore

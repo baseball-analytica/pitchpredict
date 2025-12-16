@@ -155,7 +155,6 @@ _CONTEXT_FIELD_SPECS: dict[str, _ContextFieldSpec] = {
     "pitch_number": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("pitch_number"), _encode_pitch_number, _decode_pitch_number),
     "number_through_order": _ContextFieldSpec(INT32_DTYPE, attrgetter("number_through_order"), _encode_int, _decode_int),
     "game_date": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("game_date"), _encode_game_date, _decode_game_date),
-    "game_park_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("game_park_id"), _encode_int, _decode_int),
     "fielder_2_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_2_id"), _encode_int, _decode_int),
     "fielder_3_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_3_id"), _encode_int, _decode_int),
     "fielder_4_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_4_id"), _encode_int, _decode_int),
@@ -210,8 +209,6 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
             pitchers: set[int] = set()
         if field_name == "batter_id":
             batters: set[int] = set()
-        if field_name == "game_park_id":
-            game_parks: set[int] = set()
         if field_name == "fielder_2_id":
             fielder_2s: set[int] = set()
         if field_name == "fielder_3_id":
@@ -236,8 +233,6 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
                 pitchers.add(item)
             if field_name == "batter_id":
                 batters.add(item)
-            if field_name == "game_park_id":
-                game_parks.add(item)
             if field_name == "fielder_2_id":
                 fielder_2s.add(item)
             if field_name == "fielder_3_id":
@@ -263,8 +258,6 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
             logger.info(f"Number of pitchers: {len(pitchers)}")
         if field_name == "batter_id":
             logger.info(f"Number of batters: {len(batters)}")
-        if field_name == "game_park_id":
-            logger.info(f"Number of game parks: {len(game_parks)}")
         if field_name == "fielder_2_id":
             logger.info(f"Number of fielder 2s: {len(fielder_2s)}")
         if field_name == "fielder_3_id":
