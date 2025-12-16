@@ -444,7 +444,6 @@ class PitchContext(BaseModel):
     fielder_9_id: int
     batter_days_since_prev_game: int
     pitcher_days_since_prev_game: int
-    umpire_id: int
     strike_zone_top: float
     strike_zone_bottom: float
 
@@ -483,7 +482,6 @@ class PitchContext(BaseModel):
             self.fielder_9_id,
             self.batter_days_since_prev_game,
             self.pitcher_days_since_prev_game,
-            self.umpire_id,
             self.strike_zone_top,
             self.strike_zone_bottom,
         ])

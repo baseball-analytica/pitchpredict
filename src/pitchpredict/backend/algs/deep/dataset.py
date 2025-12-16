@@ -35,7 +35,6 @@ class PackedPitchChunk(NamedTuple): # keep parallel with nn._CONTEXT_FIELD_SPECS
     fielder_9_id: torch.IntTensor
     batter_days_since_prev_game: torch.IntTensor
     pitcher_days_since_prev_game: torch.IntTensor
-    umpire_id: torch.IntTensor
     strike_zone_top: torch.FloatTensor
     strike_zone_bottom: torch.FloatTensor
 
@@ -66,7 +65,6 @@ class PackedPitchContext(NamedTuple):
     fielder_9_id: torch.IntTensor
     batter_days_since_prev_game: torch.IntTensor
     pitcher_days_since_prev_game: torch.IntTensor
-    umpire_id: torch.IntTensor
     strike_zone_top: torch.FloatTensor
     strike_zone_bottom: torch.FloatTensor
 
@@ -98,7 +96,6 @@ def chunk_to_context(chunk: PackedPitchChunk, device: torch.device) -> PackedPit
         fielder_9_id=chunk.fielder_9_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         batter_days_since_prev_game=chunk.batter_days_since_prev_game.to(device, dtype=torch.int, non_blocking=True), # type: ignore
         pitcher_days_since_prev_game=chunk.pitcher_days_since_prev_game.to(device, dtype=torch.int, non_blocking=True), # type: ignore
-        umpire_id=chunk.umpire_id.to(device, dtype=torch.int, non_blocking=True), # type: ignore
 
         # Continuous / Stats (Must be Float for Linear layers)
         pitcher_age=chunk.pitcher_age.to(device, dtype=torch.float, non_blocking=True), # type: ignore
@@ -180,7 +177,6 @@ class PackedPitchDataset(Dataset):
             fielder_9_id=torch.from_numpy(self.contexts['fielder_9_id'][start:end-1].astype(np.int32)), # type: ignore
             batter_days_since_prev_game=torch.from_numpy(self.contexts['batter_days_since_prev_game'][start:end-1].astype(np.int32)), # type: ignore
             pitcher_days_since_prev_game=torch.from_numpy(self.contexts['pitcher_days_since_prev_game'][start:end-1].astype(np.int32)), # type: ignore
-            umpire_id=torch.from_numpy(self.contexts['umpire_id'][start:end-1].astype(np.int32)), # type: ignore
             strike_zone_top=torch.from_numpy(self.contexts['strike_zone_top'][start:end-1].astype(np.float32)), # type: ignore
             strike_zone_bottom=torch.from_numpy(self.contexts['strike_zone_bottom'][start:end-1].astype(np.float32)), # type: ignore
         )

@@ -541,7 +541,6 @@ async def _build_pitch_tokens_and_contexts(
                 fielder_9_id=row["fielder_9"],
                 batter_days_since_prev_game=row["batter_days_since_prev_game"],
                 pitcher_days_since_prev_game=row["pitcher_days_since_prev_game"],
-                umpire_id=row["umpire"],
                 strike_zone_top=row["sz_top"],
                 strike_zone_bottom=row["sz_bot"],
             )
@@ -665,7 +664,6 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
         "fielder_7",
         "fielder_8",
         "fielder_9",
-        "umpire",
         "batter_days_since_prev_game",
         "pitcher_days_since_prev_game",
         "at_bat_number",
@@ -699,7 +697,6 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
         "fielder_7",
         "fielder_8",
         "fielder_9",
-        "umpire",
         "batter_days_since_prev_game",
         "pitcher_days_since_prev_game",
     ]

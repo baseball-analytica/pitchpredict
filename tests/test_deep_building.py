@@ -58,7 +58,6 @@ def _make_pitch_row(**overrides: object) -> dict[str, object]:
         "fielder_9": 9,
         "batter_days_since_prev_game": 1,
         "pitcher_days_since_prev_game": 3,
-        "umpire": 77,
         "sz_top": 3.5,
         "sz_bot": 1.5,
     }
@@ -118,7 +117,6 @@ async def test_build_pitch_tokens_includes_new_feature_tokens_and_counts() -> No
     assert ctx.fielder_9_id == 9
     assert ctx.batter_days_since_prev_game == 1
     assert ctx.pitcher_days_since_prev_game == 3
-    assert ctx.umpire_id == 77
     assert ctx.strike_zone_top == 3.5
     assert ctx.strike_zone_bottom == 1.5
 
@@ -168,7 +166,6 @@ def test_pitch_context_to_tensor_includes_extended_fields() -> None:
         fielder_9_id=17,
         batter_days_since_prev_game=2,
         pitcher_days_since_prev_game=4,
-        umpire_id=88,
         strike_zone_top=3.4,
         strike_zone_bottom=1.2,
     )
@@ -178,9 +175,8 @@ def test_pitch_context_to_tensor_includes_extended_fields() -> None:
     assert tensor[23] == 17  # fielder_9_id
     assert tensor[24] == 2  # batter_days_since_prev_game
     assert tensor[25] == 4  # pitcher_days_since_prev_game
-    assert tensor[26] == 88  # umpire_id
-    assert tensor[27] == pytest.approx(3.4)
-    assert tensor[28] == pytest.approx(1.2)
+    assert tensor[26] == pytest.approx(3.4)
+    assert tensor[27] == pytest.approx(1.2)
 
 
 def test_clean_pitch_rows_fills_optional_context_columns() -> None:
@@ -195,7 +191,6 @@ def test_clean_pitch_rows_fills_optional_context_columns() -> None:
         fielder_9=pd.NA,
         batter_days_since_prev_game=pd.NA,
         pitcher_days_since_prev_game=pd.NA,
-        umpire=pd.NA,
         sz_top=pd.NA,
         sz_bot=pd.NA,
     )
@@ -206,6 +201,5 @@ def test_clean_pitch_rows_fills_optional_context_columns() -> None:
     assert cleaned.loc[0, "fielder_9"] == 0
     assert cleaned.loc[0, "batter_days_since_prev_game"] == 0
     assert cleaned.loc[0, "pitcher_days_since_prev_game"] == 0
-    assert cleaned.loc[0, "umpire"] == 0
     assert cleaned.loc[0, "sz_top"] == pytest.approx(0.0)
     assert cleaned.loc[0, "sz_bot"] == pytest.approx(0.0)

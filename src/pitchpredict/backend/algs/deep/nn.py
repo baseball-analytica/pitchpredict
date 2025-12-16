@@ -165,7 +165,6 @@ _CONTEXT_FIELD_SPECS: dict[str, _ContextFieldSpec] = {
     "fielder_9_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_9_id"), _encode_int, _decode_int),
     "batter_days_since_prev_game": _ContextFieldSpec(INT32_DTYPE, attrgetter("batter_days_since_prev_game"), _encode_int, _decode_int),
     "pitcher_days_since_prev_game": _ContextFieldSpec(INT32_DTYPE, attrgetter("pitcher_days_since_prev_game"), _encode_int, _decode_int),
-    "umpire_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("umpire_id"), _encode_int, _decode_int),
     "strike_zone_top": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("strike_zone_top"), _encode_strike_zone_top, _decode_strike_zone_top),
     "strike_zone_bottom": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("strike_zone_bottom"), _encode_strike_zone_bottom, _decode_strike_zone_bottom),
 } # keep parallel with dataset.PackedPitchChunk but without x and y
@@ -225,8 +224,6 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
             fielder_8s: set[int] = set()
         if field_name == "fielder_9_id":
             fielder_9s: set[int] = set()
-        if field_name == "umpire_id":
-            umpires: set[int] = set()
         for idx, context in enumerate(contexts):
             item = spec.getter(context)
             if field_name == "pitcher_id":
@@ -249,8 +246,6 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
                 fielder_8s.add(item)
             if field_name == "fielder_9_id":
                 fielder_9s.add(item)
-            if field_name == "umpire_id":
-                umpires.add(item)
             array[idx] = spec.encode(item)
         array.tofile(path)
         saved_paths.append(path)
@@ -274,8 +269,6 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
             logger.info(f"Number of fielder 8s: {len(fielder_8s)}")
         if field_name == "fielder_9_id":
             logger.info(f"Number of fielder 9s: {len(fielder_9s)}")
-        if field_name == "umpire_id":
-            logger.info(f"Number of umpires: {len(umpires)}")
             
     return saved_paths
 

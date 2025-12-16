@@ -52,7 +52,6 @@ ID_FIELDS = {
     "fielder_7_id",
     "fielder_8_id",
     "fielder_9_id",
-    "umpire_id",
 }
 
 # Categorical fields (handedness)
