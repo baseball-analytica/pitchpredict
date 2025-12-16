@@ -1,0 +1,205 @@
+============================================================
+  PitchPredict Dataset Statistics
+============================================================
+
+Base directory: /raid/kline/pitchpredict/.pitchpredict_data
+Splits to inspect: train, val, test
+
+Loading train split... done
+
+Loading val split... done
+
+Loading test split... done
+
+--- Per-Split Summary ---
+  TRAIN    | Tokens:     110,660,876 | Pitches:    6,698,936 | PAs:  1,738,950 | Size:   11.96 GB
+  VAL      | Tokens:       1,129,206 | Pitches:       68,357 | PAs:     17,747 | Size:  124.92 MB
+  TEST     | Tokens:       1,129,262 | Pitches:       68,368 | PAs:     17,687 | Size:  124.93 MB
+
+============================================================
+  COMBINED STATISTICS
+============================================================
+
+--- Summary ---
+Total Tokens: 112,919,344
+Total Size: 12.20 GB
+Estimated Pitches: 6,835,661
+Plate Appearances: 1,774,384
+
+--- Token Distribution by Category ---
+
+PA_START: 1,774,384 (1.6% of all tokens)
+  PA_START: 1,774,384 (100.0%)
+
+PA_END: 1,774,384 (1.6% of all tokens)
+  PA_END: 1,774,384 (100.0%)
+
+PITCH_TYPE: 6,835,661 (6.1% of all tokens)
+  IS_FF: 2,361,612 (34.5%)
+  IS_SI: 1,174,854 (17.2%)
+  IS_SL: 1,042,836 (15.3%)
+  IS_CH: 730,039 (10.7%)
+  IS_CU: 509,072 (7.4%)
+
+SPEED: 6,835,661 (6.1% of all tokens)
+  SPEED_IS_94: 589,359 (8.6%)
+  SPEED_IS_92: 543,977 (8.0%)
+  SPEED_IS_93: 497,803 (7.3%)
+  SPEED_IS_95: 419,123 (6.1%)
+  SPEED_IS_96: 387,441 (5.7%)
+
+SPIN_RATE: 6,835,661 (6.1% of all tokens)
+  SPIN_RATE_IS_2250_2500: 2,585,811 (37.8%)
+  SPIN_RATE_IS_2500_2750: 1,631,213 (23.9%)
+  SPIN_RATE_IS_2000_2250: 1,228,838 (18.0%)
+  SPIN_RATE_IS_2750_3000: 498,469 (7.3%)
+  SPIN_RATE_IS_1750_2000: 370,048 (5.4%)
+
+SPIN_AXIS: 6,835,661 (6.1% of all tokens)
+  SPIN_AXIS_IS_210_240: 1,779,000 (26.0%)
+  SPIN_AXIS_IS_180_210: 1,224,802 (17.9%)
+  SPIN_AXIS_IS_120_150: 870,651 (12.7%)
+  SPIN_AXIS_IS_150_180: 680,766 (10.0%)
+  SPIN_AXIS_IS_240_270: 539,910 (7.9%)
+
+RELEASE_POS_X: 6,835,661 (6.1% of all tokens)
+  RELEASE_POS_X_IS_N175_N150: 686,570 (10.0%)
+  RELEASE_POS_X_IS_N200_N175: 663,358 (9.7%)
+  RELEASE_POS_X_IS_N150_N125: 642,624 (9.4%)
+  RELEASE_POS_X_IS_N225_N200: 584,947 (8.6%)
+  RELEASE_POS_X_IS_N125_N100: 499,138 (7.3%)
+
+RELEASE_POS_Z: 6,835,661 (6.1% of all tokens)
+  RELEASE_POS_Z_IS_6_625: 1,506,060 (22.0%)
+  RELEASE_POS_Z_IS_575_6: 1,417,800 (20.7%)
+  RELEASE_POS_Z_IS_625_650: 1,138,188 (16.7%)
+  RELEASE_POS_Z_IS_550_575: 963,454 (14.1%)
+  RELEASE_POS_Z_IS_650_675: 578,352 (8.5%)
+
+VX0: 6,835,661 (6.1% of all tokens)
+  VX0_IS_5_10: 2,987,359 (43.7%)
+  VX0_IS_10_15: 1,235,738 (18.1%)
+  VX0_IS_N5_0: 1,091,784 (16.0%)
+  VX0_IS_0_5: 950,126 (13.9%)
+  VX0_IS_N10_N5: 525,169 (7.7%)
+
+VY0: 6,835,661 (6.1% of all tokens)
+  VY0_IS_N130_N120: 2,568,088 (37.6%)
+  VY0_IS_N140_N130: 2,166,679 (31.7%)
+  VY0_IS_N120_N110: 1,632,301 (23.9%)
+  VY0_IS_N110_N100: 425,554 (6.2%)
+  VY0_IS_N150_N140: 30,280 (0.4%)
+
+VZ0: 6,835,661 (6.1% of all tokens)
+  VZ0_IS_N5_0: 3,987,355 (58.3%)
+  VZ0_IS_0_5: 1,879,938 (27.5%)
+  VZ0_IS_N10_N5: 682,007 (10.0%)
+  VZ0_IS_5_10: 147,813 (2.2%)
+  VZ0_IS_LTN10: 127,452 (1.9%)
+
+AX: 6,835,661 (6.1% of all tokens)
+  AX_IS_N10_N5: 1,121,861 (16.4%)
+  AX_IS_N15_N10: 1,012,983 (14.8%)
+  AX_IS_0_5: 965,271 (14.1%)
+  AX_IS_5_10: 963,213 (14.1%)
+  AX_IS_N5_0: 872,941 (12.8%)
+
+AY: 6,835,661 (6.1% of all tokens)
+  AY_IS_25_30: 2,861,841 (41.9%)
+  AY_IS_30_35: 2,364,882 (34.6%)
+  AY_IS_20_25: 1,038,991 (15.2%)
+  AY_IS_35_40: 524,404 (7.7%)
+  AY_IS_15_20: 33,826 (0.5%)
+
+AZ: 6,835,661 (6.1% of all tokens)
+  AZ_IS_N20_N15: 1,881,910 (27.5%)
+  AZ_IS_GTN15: 1,444,946 (21.1%)
+  AZ_IS_N25_N20: 1,265,730 (18.5%)
+  AZ_IS_N30_N25: 1,113,583 (16.3%)
+  AZ_IS_N35_N30: 610,778 (8.9%)
+
+RELEASE_EXTENSION: 6,835,661 (6.1% of all tokens)
+  RELEASE_EXTENSION_IS_65_7: 2,411,648 (35.3%)
+  RELEASE_EXTENSION_IS_6_65: 2,268,834 (33.2%)
+  RELEASE_EXTENSION_IS_7_75: 984,910 (14.4%)
+  RELEASE_EXTENSION_IS_55_6: 927,962 (13.6%)
+  RELEASE_EXTENSION_IS_5_55: 147,297 (2.2%)
+
+PLATE_POS_X: 6,835,661 (6.1% of all tokens)
+  PLATE_POS_X_IS_0_025: 792,100 (11.6%)
+  PLATE_POS_X_IS_025_050: 772,090 (11.3%)
+  PLATE_POS_X_IS_N025_0: 752,637 (11.0%)
+  PLATE_POS_X_IS_050_075: 692,688 (10.1%)
+  PLATE_POS_X_IS_N050_N025: 661,279 (9.7%)
+
+PLATE_POS_Z: 6,835,661 (6.1% of all tokens)
+  PLATE_POS_Z_IS_225_250: 734,377 (10.7%)
+  PLATE_POS_Z_IS_250_275: 716,849 (10.5%)
+  PLATE_POS_Z_IS_2_225: 698,734 (10.2%)
+  PLATE_POS_Z_IS_275_3: 646,319 (9.5%)
+  PLATE_POS_Z_IS_175_2: 611,468 (8.9%)
+
+RESULT: 6,835,661 (6.1% of all tokens)
+  RESULT_IS_BALL: 2,292,695 (33.5%)
+  RESULT_IS_FOUL: 1,211,728 (17.7%)
+  RESULT_IS_IN_PLAY: 1,192,320 (17.4%)
+  RESULT_IS_CALLED_STRIKE: 1,133,373 (16.6%)
+  RESULT_IS_SWINGING_STRIKE: 701,882 (10.3%)
+
+--- Context Variables ---
+
+ID Fields (unique counts per split summed):
+  batter_id: 6,741 unique
+  fielder_2_id: 998 unique
+  fielder_3_id: 1,941 unique
+  fielder_4_id: 1,868 unique
+  fielder_5_id: 1,949 unique
+  fielder_6_id: 1,393 unique
+  fielder_7_id: 2,747 unique
+  fielder_8_id: 1,786 unique
+  fielder_9_id: 2,455 unique
+  game_park_id: 48,532 unique
+  pitcher_id: 6,553 unique
+  umpire_id: 3 unique
+
+Categorical Fields:
+  batter_hits: L=41.9%, R=58.1%
+  pitcher_throws: L=27.4%, R=72.6%
+
+Numeric Fields (raw encoded + decoded where applicable):
+  pitcher_age:
+    raw: [-2.375, 4.125] (mean: 0.138)
+    decoded: [19.0, 45.0] (mean: 29.05268706235377)
+  batter_age:
+    raw: [-2.625, 4.125] (mean: 0.038)
+    decoded: [18.0, 45.0] (mean: 28.650926924607855)
+  count_balls: [0.000, 4.000] (mean: 0.876)
+  count_strikes: [0.000, 3.000] (mean: 0.887)
+  outs: [0.000, 2.000] (mean: 0.980)
+  bases_state: [0.000, 7.000] (mean: 1.052)
+  score_bat:
+    raw: [0.000, 2.900] (mean: 0.226)
+    decoded: [0.0, 29.000000953674316] (mean: 2.2578937866440065)
+  score_fld:
+    raw: [0.000, 2.900] (mean: 0.230)
+    decoded: [0.0, 29.000000953674316] (mean: 2.301573253304126)
+  inning: [1.000, 19.000] (mean: 4.964)
+  pitch_number:
+    raw: [0.010, 0.210] (mean: 0.029)
+    decoded: [0.9999999776482582, 20.999999344348907] (mean: 2.8970177762681346)
+  number_through_order: [1.000, 5.000] (mean: 1.493)
+  game_date:
+    raw: [0.115, 0.996] (mean: 0.562)
+    decoded: [2016-04-03, 2025-10-31] (mean: 2021-02-12)
+  batter_days_since_prev_game: [0.000, 201.000] (mean: 1.698)
+  pitcher_days_since_prev_game: [0.000, 180.000] (mean: 5.461)
+  strike_zone_top:
+    raw: [-4.500, 5.500] (mean: 0.024)
+    decoded: [2.5, 4.5] (mean: 3.4048596414440357)
+  strike_zone_bottom:
+    raw: [-8.500, 9.000] (mean: -0.132)
+    decoded: [0.75, 2.5] (mean: 1.5867675793467626)
+
+============================================================
+  Done!
+============================================================
