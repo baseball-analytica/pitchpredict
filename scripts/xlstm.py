@@ -85,17 +85,17 @@ class Config:
     """
 
     # Data
-    data_dir: str = "/raid/kline/pitchpredict/.pitchpredict_data"
-    out_dir: str = "/raid/ckpts/pitch_xlstm_tiny_tinierseq"
+    data_dir: str = "/raid/kline/pitchpredict/.pitchpredict_data_fixed"
+    out_dir: str = "/raid/ckpts/pitch_xlstm_fullseq_batch16"
     context_prefix: str = "pitch_context"
     run_id: str | None = None
     # Seq
-    vocab_size: int = 192
-    seq_len: int = 32
+    vocab_size: int = 258
+    seq_len: int = 256
 
     # Model
-    d_model: int = 256
-    num_blocks: int = 6
+    d_model: int = 384
+    num_blocks: int = 12
     dqk_factor: float = 0.5
     num_heads: int = 8
     dropout: float = 0.0
@@ -105,6 +105,7 @@ class Config:
     # Baseball
     num_pitchers: int = 2962
     num_batters: int = 3701
+    num_fielders: int = 2838  # shared embedding for all fielder positions
 
     # Gating
     denom_floor: float = 1.0
@@ -120,13 +121,13 @@ class Config:
     grad_clip: float = 0.50
 
     # Batch & Train
-    micro_batch_size: int = 256
+    micro_batch_size: int = 16
     grad_accum_steps: int = 1
-    max_steps: int = 100000
+    max_steps: int = 200000
 
     # Memory features
     tbptt: int = 0  # 0 = off; else detach interval (e.g., 256)
-    act_ckpt: int = 1  # 0/1 toggle
+    act_ckpt: int = 0  # 0/1 toggle
 
     # Misc
     eod_id: int = PitchToken.PA_END.value
@@ -519,17 +520,20 @@ class PitchContextAdapter(nn.Module):
         d_model: int,
         num_pitchers: int,
         num_batters: int,
+        num_fielders: int = 4000,
         dropout: float = 0.1,
     ):
         super().__init__()
 
         self.num_pitchers = num_pitchers
         self.num_batters = num_batters
-        
+        self.num_fielders = num_fielders
+
         # Entity embeddings
         self.pitched_emb = nn.Embedding(num_pitchers+1, 64, padding_idx=0)
         self.batter_emb = nn.Embedding(num_batters+1, 64, padding_idx=0)
-        
+        self.fielder_emb = nn.Embedding(num_fielders+1, 32, padding_idx=0)  # shared for all fielder positions
+
         # State embeddings
         self.emb_p_throws = nn.Embedding(3, 8) # 0, 1, 2
         self.emb_b_hits = nn.Embedding(4, 8) # 0, 1, 2, 3
@@ -540,9 +544,12 @@ class PitchContextAdapter(nn.Module):
         self.emb_bases = nn.Embedding(9, 16) # 0-7 (bitmask) + pad
         self.emb_inning = nn.Embedding(25, 16) # 1-24 (clip larger)
 
-        self.cat_emb_dim = 64+64+8+8+8+8+8+8+16+16
+        # cat_emb_dim: pitcher(64) + batter(64) + 8*fielder(32) + p_throws(8) + b_hits(8) + balls(8) + strikes(8) + outs(8) + order(8) + bases(16) + inning(16)
+        self.cat_emb_dim = 64 + 64 + 8*32 + 8 + 8 + 8 + 8 + 8 + 8 + 16 + 16  # = 464
 
-        self.num_continuous = 6
+        # Continuous: pitcher_age, batter_age, score_bat, score_fld, pitch_number, game_date,
+        #             batter_days_since_prev_game, pitcher_days_since_prev_game, strike_zone_top, strike_zone_bottom
+        self.num_continuous = 10
 
         self.cont_proj = nn.Sequential(
             nn.Linear(self.num_continuous, 128),
@@ -564,15 +571,26 @@ class PitchContextAdapter(nn.Module):
 
         pe = self.pitched_emb(pid+1)
         be = self.batter_emb(bid+1)
-        te = self.emb_p_throws(chunk.pitcher_throws.clamp(0, 3))
-        he = self.emb_b_hits(chunk.batter_hits.clamp(0, 4))
-        ball_e = self.emb_balls(chunk.count_balls.clamp(0, 5))
-        str_e = self.emb_strikes(chunk.count_strikes.clamp(0, 4))
-        out_e = self.emb_outs(chunk.outs.clamp(0, 4))
-        base_e = self.emb_bases(chunk.bases_state.clamp(0, 9))
+
+        # Fielder embeddings (positions 2-9)
+        f2 = self.fielder_emb((chunk.fielder_2_id % self.num_fielders) + 1)
+        f3 = self.fielder_emb((chunk.fielder_3_id % self.num_fielders) + 1)
+        f4 = self.fielder_emb((chunk.fielder_4_id % self.num_fielders) + 1)
+        f5 = self.fielder_emb((chunk.fielder_5_id % self.num_fielders) + 1)
+        f6 = self.fielder_emb((chunk.fielder_6_id % self.num_fielders) + 1)
+        f7 = self.fielder_emb((chunk.fielder_7_id % self.num_fielders) + 1)
+        f8 = self.fielder_emb((chunk.fielder_8_id % self.num_fielders) + 1)
+        f9 = self.fielder_emb((chunk.fielder_9_id % self.num_fielders) + 1)
+
+        te = self.emb_p_throws(chunk.pitcher_throws.clamp(0, 2))
+        he = self.emb_b_hits(chunk.batter_hits.clamp(0, 3))
+        ball_e = self.emb_balls(chunk.count_balls.clamp(0, 4))
+        str_e = self.emb_strikes(chunk.count_strikes.clamp(0, 3))
+        out_e = self.emb_outs(chunk.outs.clamp(0, 3))
+        base_e = self.emb_bases(chunk.bases_state.clamp(0, 8))
         order_e = self.emb_order(chunk.number_through_order.clamp(0, 4))
         inn_e = self.emb_inning(chunk.inning.clamp(0, 24))
-        
+
         cont_input = torch.stack([
             chunk.pitcher_age,
             chunk.batter_age,
@@ -580,12 +598,17 @@ class PitchContextAdapter(nn.Module):
             chunk.score_fld,
             chunk.pitch_number,
             chunk.game_date,
+            chunk.batter_days_since_prev_game.float(),
+            chunk.pitcher_days_since_prev_game.float(),
+            chunk.strike_zone_top,
+            chunk.strike_zone_bottom,
         ], dim=-1)
 
         cont_feats = self.cont_proj(cont_input)
 
         combined = torch.cat([
             pe, be,
+            f2, f3, f4, f5, f6, f7, f8, f9,
             te, he, ball_e, str_e, out_e, order_e, base_e, inn_e,
             cont_feats,
         ], dim=-1)
@@ -629,6 +652,7 @@ class BaseballxLSTM(nn.Module):
         eod_id: int = 0xFB,
         num_pitchers: int = 1730,
         num_batters: int = 1923,
+        num_fielders: int = 4000,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -637,7 +661,7 @@ class BaseballxLSTM(nn.Module):
         self.logits_softcap = logits_softcap
 
         self.token_embed = nn.Embedding(vocab_size, d_model)
-        self.context_adapter = PitchContextAdapter(d_model, num_pitchers, num_batters)
+        self.context_adapter = PitchContextAdapter(d_model, num_pitchers, num_batters, num_fielders)
         self.fusion = FusionLayer(d_model)
         blocks = []
         for _ in range(num_blocks):
@@ -791,6 +815,7 @@ def build_model(cfg: Config, device: torch.device) -> BaseballxLSTM:
         eod_id=cfg.eod_id,
         num_pitchers=cfg.num_pitchers,
         num_batters=cfg.num_batters,
+        num_fielders=cfg.num_fielders,
     )
     init_gate_biases_v2(model)
     torch.cuda.set_device(device)

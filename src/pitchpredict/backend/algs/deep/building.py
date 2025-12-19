@@ -519,7 +519,6 @@ async def _build_pitch_tokens_and_contexts(
                 pitch_number=row["pitch_number"],
                 number_through_order=row["n_thruorder_pitcher"],
                 game_date=game_date,
-                game_park_id=row["game_pk"],
                 fielder_2_id=row["fielder_2"],
                 fielder_3_id=row["fielder_3"],
                 fielder_4_id=row["fielder_4"],
@@ -530,7 +529,6 @@ async def _build_pitch_tokens_and_contexts(
                 fielder_9_id=row["fielder_9"],
                 batter_days_since_prev_game=row["batter_days_since_prev_game"],
                 pitcher_days_since_prev_game=row["pitcher_days_since_prev_game"],
-                umpire_id=row["umpire"],
                 strike_zone_top=row["sz_top"],
                 strike_zone_bottom=row["sz_bot"],
             )

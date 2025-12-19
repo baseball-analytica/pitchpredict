@@ -434,7 +434,6 @@ class PitchContext(BaseModel):
     pitch_number: int
     number_through_order: int
     game_date: str
-    game_park_id: int
     fielder_2_id: int
     fielder_3_id: int
     fielder_4_id: int
@@ -445,7 +444,6 @@ class PitchContext(BaseModel):
     fielder_9_id: int
     batter_days_since_prev_game: int
     pitcher_days_since_prev_game: int
-    umpire_id: int
     strike_zone_top: float
     strike_zone_bottom: float
 
@@ -474,7 +472,6 @@ class PitchContext(BaseModel):
             self.pitch_number,
             self.number_through_order,
             game_year,
-            self.game_park_id,
             self.fielder_2_id,
             self.fielder_3_id,
             self.fielder_4_id,
@@ -485,7 +482,6 @@ class PitchContext(BaseModel):
             self.fielder_9_id,
             self.batter_days_since_prev_game,
             self.pitcher_days_since_prev_game,
-            self.umpire_id,
             self.strike_zone_top,
             self.strike_zone_bottom,
         ])

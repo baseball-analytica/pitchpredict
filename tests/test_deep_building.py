@@ -113,11 +113,9 @@ async def test_build_pitch_tokens_includes_new_feature_tokens_and_counts() -> No
     assert PitchToken.AZ_IS_N35_N30 in token_set
 
     ctx = pitch_contexts[0]
-    assert ctx.game_park_id == 1001
     assert ctx.fielder_9_id == 9
     assert ctx.batter_days_since_prev_game == 1
     assert ctx.pitcher_days_since_prev_game == 3
-    assert ctx.umpire_id == 77
     assert ctx.strike_zone_top == 3.5
     assert ctx.strike_zone_bottom == 1.5
 
@@ -157,7 +155,6 @@ def test_pitch_context_to_tensor_includes_extended_fields() -> None:
         pitch_number=12,
         number_through_order=2,
         game_date="2023-05-04",
-        game_park_id=3001,
         fielder_2_id=10,
         fielder_3_id=11,
         fielder_4_id=12,
@@ -168,18 +165,15 @@ def test_pitch_context_to_tensor_includes_extended_fields() -> None:
         fielder_9_id=17,
         batter_days_since_prev_game=2,
         pitcher_days_since_prev_game=4,
-        umpire_id=88,
         strike_zone_top=3.4,
         strike_zone_bottom=1.2,
     )
 
     tensor = context.to_tensor().tolist()
     assert tensor[15] == 2023  # game year derived from the date
-    assert tensor[16] == 3001  # game_park_id
     assert tensor[24] == 17  # fielder_9_id
     assert tensor[25] == 2  # batter_days_since_prev_game
     assert tensor[26] == 4  # pitcher_days_since_prev_game
-    assert tensor[27] == 88  # umpire_id
     assert tensor[28] == pytest.approx(3.4)
     assert tensor[29] == pytest.approx(1.2)
 

@@ -18,36 +18,42 @@ Usage:
 # If non-empty, this takes priority over --ckpt_pattern
 # =============================================================================
 CHECKPOINT_LIST: list[str] = [
-    # # snowy sponge
-    # "/raid/ckpts/pitch_xlstm_512seq/ckpt_step_0002000.pt",
-    # # scarlet snowflake
-    # "/raid/ckpts/pitch_xlstm_small/ckpt_step_0002000.pt",
-    # swift dew
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq/ckpt_step_0010000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq/ckpt_step_0015000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq/ckpt_step_0019500.pt",
-    # faithful sound
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0008000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0011000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0013000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0017000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0020000.pt",
-    # fragrant blaze
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0015000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0020000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0022000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0027000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0029000.pt",
-    # leafy wood
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0018000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0022000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0025000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0028000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0031000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0040000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0050000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0060000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0100000.pt",
+
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0024000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0025000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0026000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0027000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0028000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0029000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0030000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0031000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0032000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0033000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0034000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0035000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0036000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0037000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0038000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0039000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0040000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0041000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0042000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0043000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0044000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0045000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0046000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0047000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0048000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0049000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0050000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0051000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0052000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0053000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0054000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0055000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0056000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0057000.pt",
+    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0058000.pt",
 ]
 # =============================================================================
 
@@ -62,6 +68,8 @@ from dataclasses import asdict
 from datetime import datetime
 
 import numpy as np
+from tqdm import tqdm
+import wandb
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -76,6 +84,7 @@ from pitchpredict.backend.xlstm import (
     BaseballxLSTM,
     Config,
     set_seed,
+    setup_wandb,
 )
 
 
@@ -102,6 +111,7 @@ def build_model(cfg: Config, device: torch.device) -> BaseballxLSTM:
         eod_id=cfg.eod_id,
         num_pitchers=cfg.num_pitchers,
         num_batters=cfg.num_batters,
+        num_fielders=cfg.num_fielders,
     )
     # Note: No init_gate_biases_v2() - biases will be loaded from checkpoint
     torch.cuda.set_device(device)
@@ -122,7 +132,7 @@ def evaluate(
     autocast_dtype = torch.bfloat16 if amp_dtype == "bf16" else torch.float16
 
     with torch.no_grad():
-        for chunk in loader:
+        for chunk in tqdm(loader, desc="Evaluating", leave=False):
             x = chunk.x.to(device, non_blocking=True)
             y = chunk.y.to(device, non_blocking=True)
             x_ctx = chunk_to_context(chunk, device)
@@ -263,6 +273,18 @@ def parse_args() -> argparse.Namespace:
         default=42,
         help="Random seed for reproducibility (default: 42)",
     )
+    parser.add_argument(
+        "--run_id",
+        type=str,
+        default=None,
+        help="Wandb run ID to resume.",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=128,
+        help="Batch size for evaluation (default: 128)",
+    )
 
     return parser.parse_args()
 
@@ -278,6 +300,11 @@ def main() -> None:
     if not torch.cuda.is_available():
         print("Warning: CUDA not available, falling back to CPU")
         device = torch.device("cpu")
+
+    if args.run_id is not None:
+        setup_wandb(cfg=Config(), run_id=args.run_id)
+        wandb.define_metric("eval_step")
+        wandb.define_metric("final_test_loss", step_metric="eval_step")
 
     # Find all checkpoints (CHECKPOINT_LIST takes priority over glob)
     if CHECKPOINT_LIST:
@@ -331,12 +358,9 @@ def main() -> None:
             print(f"  Model: d_model={cfg.d_model}, blocks={cfg.num_blocks}, heads={cfg.num_heads}")
             print(f"  Batch size: {cfg.micro_batch_size}, Seq len: {cfg.seq_len}")
 
-            # Build model
-            cfg.num_pitchers = 2962
-            cfg.num_batters = 3701
             model = build_model(cfg, device)
-            model.load_state_dict(state["model"], strict=False)
-            # model = torch.compile(model, mode="default")
+            model.load_state_dict(state["model"], strict=True)
+            model = torch.compile(model, mode="default")
 
             # Load test dataset
             test_ds = PackedPitchDataset(
@@ -348,7 +372,7 @@ def main() -> None:
 
             test_loader = DataLoader(
                 test_ds,
-                batch_size=cfg.micro_batch_size,
+                batch_size=args.batch_size,
                 shuffle=False,
                 num_workers=4,
                 pin_memory=True,
@@ -371,6 +395,10 @@ def main() -> None:
                 "test_bpb": bpb,
                 "config": asdict(cfg),
             })
+
+            # Log to wandb
+            if args.run_id is not None:
+                wandb.log({"eval_step": step, "final_test_loss": nll})
 
             # Free memory
             del model
