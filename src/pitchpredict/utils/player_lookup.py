@@ -122,18 +122,21 @@ class PlayerNameCache:
 
 def load_session_info(data_dir: str) -> list[dict]:
     """
-    Load pitcher_id, batter_id, game_date for each session.
+    Load pitcher_id, batter_ids, game_date for each session.
 
     Args:
         data_dir: Path to data directory containing pitch_seq.bin and context files
 
     Returns:
-        List of dicts with pitcher_id, batter_id (first batter), and game_date
+        List of dicts with pitcher_id, batter_ids (list of unique batters in order seen), and game_date
     """
+    from pitchpredict.backend.algs.deep.dataset import SESSION_END_TOKEN
+
     # Load tokens to find session boundaries
     tokens_path = os.path.join(data_dir, "pitch_seq.bin")
     tokens = np.memmap(tokens_path, dtype=TOKEN_DTYPE, mode="r")
     session_starts = np.where(tokens == SESSION_START_TOKEN)[0]
+    session_ends = np.where(tokens == SESSION_END_TOKEN)[0]
 
     # Load context fields
     pitcher_ids = np.memmap(
@@ -153,10 +156,27 @@ def load_session_info(data_dir: str) -> list[dict]:
     )
 
     sessions = []
-    for start in session_starts:
+    for i, start in enumerate(session_starts):
+        # Determine session end
+        if i < len(session_ends):
+            end = int(session_ends[i])
+        else:
+            end = len(tokens)
+
+        # Get unique batters in order seen
+        session_batter_ids = batter_ids[start:end]
+        unique_batters = []
+        seen = set()
+        for bid in session_batter_ids:
+            bid = int(bid)
+            if bid not in seen:
+                seen.add(bid)
+                unique_batters.append(bid)
+
         sessions.append({
             "pitcher_id": int(pitcher_ids[start]),
-            "batter_id": int(batter_ids[start]),  # First batter of session
+            "batter_ids": unique_batters,
+            "batter_id": unique_batters[0] if unique_batters else 0,  # First batter for backwards compat
             "game_date": decode_game_date(float(game_dates[start])),
         })
 

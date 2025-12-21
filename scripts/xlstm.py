@@ -85,13 +85,13 @@ class Config:
     """
 
     # Data
-    data_dir: str = "/raid/kline/pitchpredict/.pitchpredict_data_fixed"
-    out_dir: str = "/raid/ckpts/pitch_xlstm_fullseq_batch16"
+    data_dir: str = "/raid/kline/pitchpredict/.pitchpredict_session_data"
+    out_dir: str = "/raid/ckpts/pitch_xlstm_sessions"
     context_prefix: str = "pitch_context"
     run_id: str | None = None
     # Seq
     vocab_size: int = 258
-    seq_len: int = 256
+    seq_len: int = 512
 
     # Model
     d_model: int = 384
@@ -103,9 +103,9 @@ class Config:
     logits_softcap: float = 30.0
 
     # Baseball
-    num_pitchers: int = 2962
-    num_batters: int = 3701
-    num_fielders: int = 2838  # shared embedding for all fielder positions
+    num_pitchers: int = 3000
+    num_batters: int = 3700
+    num_fielders: int = 3000  # shared embedding for all fielder positions
 
     # Gating
     denom_floor: float = 1.0
@@ -121,16 +121,16 @@ class Config:
     grad_clip: float = 0.50
 
     # Batch & Train
-    micro_batch_size: int = 16
+    micro_batch_size: int = 8
     grad_accum_steps: int = 1
-    max_steps: int = 200000
+    max_steps: int = 100000
 
     # Memory features
     tbptt: int = 0  # 0 = off; else detach interval (e.g., 256)
     act_ckpt: int = 0  # 0/1 toggle
 
     # Misc
-    eod_id: int = PitchToken.PA_END.value
+    eod_id: int = PitchToken.SESSION_END.value
     amp_dtype: str = "bf16"
     amp_scalar_init: float = 2.0
     seed: int = 64
@@ -967,7 +967,7 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
         train_ds,
         batch_size=cfg.micro_batch_size,
         sampler=train_sampler,
-        num_workers=8,
+        num_workers=28,
         pin_memory=True,
         prefetch_factor=4,
         persistent_workers=True,
@@ -977,7 +977,7 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
         val_ds,
         batch_size=cfg.micro_batch_size,
         sampler=val_sampler,
-        num_workers=2,
+        num_workers=14,
         pin_memory=True,
         drop_last=True,
     )
@@ -985,7 +985,7 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
         test_ds,
         batch_size=cfg.micro_batch_size,
         sampler=test_sampler,
-        num_workers=2,
+        num_workers=14,
         pin_memory=True,
         drop_last=True,
     )
@@ -1078,7 +1078,7 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
                 scheduler.step()
                 global_step += 1
 
-                running_loss += loss.detach()
+                running_loss += loss.detach() * cfg.grad_accum_steps
 
                 if is_main_process() and (global_step % cfg.log_interval == 0):
                     avg_loss = (running_loss / cfg.log_interval).item()

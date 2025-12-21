@@ -19,41 +19,29 @@ Usage:
 # =============================================================================
 CHECKPOINT_LIST: list[str] = [
 
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0024000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0025000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0026000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0027000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0028000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0029000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0030000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0031000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0032000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0033000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0034000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0035000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0036000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0037000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0038000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0039000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0040000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0041000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0042000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0043000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0044000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0045000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0046000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0047000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0048000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0049000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0050000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0051000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0052000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0053000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0054000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0055000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0056000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0057000.pt",
-    "/raid/ckpts/pitch_xlstm_fullseq_batch16/ckpt_step_0058000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0058000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0059000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0060000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0061000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0062000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0063000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0064000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0065000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0066000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0067000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0068000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0069000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0070000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0071000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0072000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0073000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0074000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0075000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0076000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0077000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0078000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0079000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0080000.pt",
 ]
 # =============================================================================
 
@@ -140,11 +128,11 @@ def evaluate(
             with torch.amp.autocast("cuda", dtype=autocast_dtype):
                 logits = model(x, x_ctx)
                 loss = F.cross_entropy(
-                    logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum"
+                    logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum", ignore_index=0
                 )
 
             total_nll += loss.item()
-            total_tokens += y.numel()
+            total_tokens += (y != 0).sum().item()  # Only count non-PAD tokens
 
     nll = total_nll / max(1, total_tokens)
     bpb = nll_to_bpb(nll)
@@ -258,7 +246,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output_json",
         type=str,
-        default="eval_results.json",
+        default="new_eval_results.json",
         help="Path to save JSON results (default: eval_results.json)",
     )
     parser.add_argument(

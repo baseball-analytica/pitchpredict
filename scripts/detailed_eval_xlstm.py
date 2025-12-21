@@ -390,7 +390,6 @@ def main() -> None:
     # Build and load model
     model = build_model(cfg, device)
     model.load_state_dict(state["model"], strict=True)
-    model = torch.compile(model, mode="default")
     model.eval()
 
     # Load session data

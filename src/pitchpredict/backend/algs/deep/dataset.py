@@ -146,32 +146,47 @@ class PackedPitchDataset(Dataset):
         session_starts = np.where(self.tokens == SESSION_START_TOKEN)[0]
         session_ends = np.where(self.tokens == SESSION_END_TOKEN)[0]
 
+        # Store session boundaries for shuffling between epochs
         if len(session_starts) == 0:
             # Fallback for legacy datasets without session tokens
-            self.chunks = [(0, self.total_tokens)]
+            self._session_boundaries: list[tuple[int, int]] = [(0, self.total_tokens)]
         else:
-            # Build chunk list: (start_pos, end_pos) for each chunk
-            # Each session can produce multiple chunks if longer than seq_len
-            self.chunks: list[tuple[int, int]] = []
-
+            self._session_boundaries = []
             for i, sess_start in enumerate(session_starts):
-                # Session ends at SESSION_END (inclusive) or end of data
                 if i < len(session_ends):
                     sess_end = int(session_ends[i]) + 1  # +1 to include SESSION_END token
                 else:
                     sess_end = self.total_tokens
+                self._session_boundaries.append((int(sess_start), sess_end))
 
-                session_len = sess_end - sess_start
+        # Build initial chunk list
+        self._rebuild_chunks()
 
-                # Create chunks for this session
-                offset = 0
-                while offset < session_len:
-                    chunk_start = int(sess_start) + offset
-                    chunk_end = min(chunk_start + self.L, sess_end)
-                    # Only add chunk if it has at least 2 tokens (for x and y)
-                    if chunk_end - chunk_start >= 2:
-                        self.chunks.append((chunk_start, chunk_end))
-                    offset += self.L
+    def set_offset(self, seed: int) -> None:
+        """Shuffle session order for data augmentation.
+
+        Args:
+            seed: Random seed for shuffling sessions.
+        """
+        import random
+        rng = random.Random(seed)
+        rng.shuffle(self._session_boundaries)
+        self._rebuild_chunks()
+
+    def _rebuild_chunks(self) -> None:
+        """Rebuild chunk list from current session order."""
+        self.chunks: list[tuple[int, int]] = []
+
+        for sess_start, sess_end in self._session_boundaries:
+            session_len = sess_end - sess_start
+            pos = 0
+
+            while pos < session_len:
+                chunk_start = sess_start + pos
+                chunk_end = min(chunk_start + self.L, sess_end)
+                if chunk_end - chunk_start >= 2:
+                    self.chunks.append((chunk_start, chunk_end))
+                pos += self.L
 
     def __len__(self) -> int:
         return len(self.chunks)

@@ -56,13 +56,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--session_id",
         type=int,
-        required=True,
+        default=158,
         help="Session ID to inspect",
     )
     parser.add_argument(
         "--predictions",
         type=str,
-        default="test_preds.npz",
+        default="new_test_preds.npz",
         help="Path to predictions.npz file",
     )
     parser.add_argument(

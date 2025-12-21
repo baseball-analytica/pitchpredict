@@ -17,8 +17,39 @@ import json
 import os
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from pitchpredict.utils.player_lookup import PlayerNameCache, load_session_info
+from pitchpredict.backend.algs.deep.types import PitchToken
+
+
+# Pitch type token range
+PITCH_TYPE_START = PitchToken.IS_CH.value  # 6
+PITCH_TYPE_END = PitchToken.IS_AB.value    # 26
+
+# Human-readable pitch type names
+PITCH_TYPE_NAMES = {
+    PitchToken.IS_CH.value: "CH",   # Changeup
+    PitchToken.IS_CU.value: "CU",   # Curveball
+    PitchToken.IS_FC.value: "FC",   # Cutter
+    PitchToken.IS_EP.value: "EP",   # Eephus
+    PitchToken.IS_FO.value: "FO",   # Forkball
+    PitchToken.IS_FF.value: "FF",   # Four-seam
+    PitchToken.IS_KN.value: "KN",   # Knuckleball
+    PitchToken.IS_KC.value: "KC",   # Knuckle-curve
+    PitchToken.IS_SC.value: "SC",   # Screwball
+    PitchToken.IS_SI.value: "SI",   # Sinker
+    PitchToken.IS_SL.value: "SL",   # Slider
+    PitchToken.IS_SV.value: "SV",   # Slurve
+    PitchToken.IS_FS.value: "FS",   # Splitter
+    PitchToken.IS_ST.value: "ST",   # Sweeper
+    PitchToken.IS_FA.value: "FA",   # Fastball
+    PitchToken.IS_CS.value: "CS",   # Slow Curve
+    PitchToken.IS_PO.value: "PO",   # Pitchout
+    PitchToken.IS_UN.value: "UN",   # Unknown
+    PitchToken.IS_IN.value: "IN",   # Intentional
+    PitchToken.IS_AB.value: "AB",   # Automatic Ball
+}
 
 
 def compute_session_metrics(
@@ -53,7 +84,8 @@ def compute_session_metrics(
         session_metrics.append({
             "session_id": int(sid),
             "pitcher_id": info["pitcher_id"],
-            "batter_id": info["batter_id"],
+            "batter_ids": info.get("batter_ids", [info["batter_id"]]),  # List of all batters
+            "batter_id": info["batter_id"],  # First batter for backwards compat
             "game_date": info["game_date"],
             "n_tokens": int(n_tokens),
             "correct": int(correct),
@@ -94,6 +126,131 @@ def compute_pitcher_metrics(
     return pitcher_metrics
 
 
+def compute_pitch_type_confusion(
+    targets: np.ndarray,
+    predictions: np.ndarray,
+) -> tuple[np.ndarray, list[str], dict]:
+    """
+    Compute confusion matrix for pitch type predictions only.
+
+    Args:
+        targets: Ground truth token IDs
+        predictions: Predicted token IDs
+
+    Returns:
+        Tuple of (confusion_matrix, labels, stats_dict)
+    """
+    # Filter to only pitch type tokens
+    mask = (targets >= PITCH_TYPE_START) & (targets <= PITCH_TYPE_END)
+    pitch_targets = targets[mask]
+    pitch_preds = predictions[mask]
+
+    # Get unique pitch types that appear in targets
+    unique_types = sorted(set(pitch_targets))
+    labels = [PITCH_TYPE_NAMES.get(t, f"T{t}") for t in unique_types]
+    n_classes = len(unique_types)
+
+    # Build token_id -> index mapping
+    token_to_idx = {t: i for i, t in enumerate(unique_types)}
+
+    # Compute confusion matrix manually
+    cm = np.zeros((n_classes, n_classes), dtype=np.int64)
+    for true_tok, pred_tok in zip(pitch_targets, pitch_preds):
+        true_idx = token_to_idx.get(true_tok)
+        pred_idx = token_to_idx.get(pred_tok)
+        if true_idx is not None and pred_idx is not None:
+            cm[true_idx, pred_idx] += 1
+
+    # Compute per-class stats
+    stats = {}
+    for i, token_id in enumerate(unique_types):
+        label = labels[i]
+        true_count = cm[i, :].sum()
+        pred_count = cm[:, i].sum()
+        correct = cm[i, i]
+        precision = correct / pred_count if pred_count > 0 else 0.0
+        recall = correct / true_count if true_count > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        stats[label] = {
+            "token_id": int(token_id),
+            "true_count": int(true_count),
+            "pred_count": int(pred_count),
+            "correct": int(correct),
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+        }
+
+    return cm, labels, stats
+
+
+def plot_confusion_matrix(
+    cm: np.ndarray,
+    labels: list[str],
+    output_path: str,
+    title: str = "Pitch Type Confusion Matrix",
+) -> None:
+    """
+    Plot and save confusion matrix heatmap.
+
+    Args:
+        cm: Confusion matrix array
+        labels: Class labels
+        output_path: Path to save the plot
+        title: Plot title
+    """
+    # Normalize by row (true labels) for better visualization
+    cm_normalized = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+    cm_normalized = np.nan_to_num(cm_normalized)  # Handle division by zero
+
+    fig, axes = plt.subplots(1, 2, figsize=(20, 8))
+
+    # Raw counts
+    ax1 = axes[0]
+    im1 = ax1.imshow(cm, cmap="Blues")
+    ax1.set_xticks(range(len(labels)))
+    ax1.set_yticks(range(len(labels)))
+    ax1.set_xticklabels(labels, rotation=45, ha="right")
+    ax1.set_yticklabels(labels)
+    ax1.set_xlabel("Predicted")
+    ax1.set_ylabel("True")
+    ax1.set_title(f"{title} (Counts)")
+    plt.colorbar(im1, ax=ax1)
+
+    # Add text annotations for counts
+    for i in range(len(labels)):
+        for j in range(len(labels)):
+            val = cm[i, j]
+            if val > 0:
+                color = "white" if val > cm.max() / 2 else "black"
+                ax1.text(j, i, f"{val}", ha="center", va="center", color=color, fontsize=7)
+
+    # Normalized (recall)
+    ax2 = axes[1]
+    im2 = ax2.imshow(cm_normalized, cmap="Blues", vmin=0, vmax=1)
+    ax2.set_xticks(range(len(labels)))
+    ax2.set_yticks(range(len(labels)))
+    ax2.set_xticklabels(labels, rotation=45, ha="right")
+    ax2.set_yticklabels(labels)
+    ax2.set_xlabel("Predicted")
+    ax2.set_ylabel("True")
+    ax2.set_title(f"{title} (Row-Normalized / Recall)")
+    plt.colorbar(im2, ax=ax2)
+
+    # Add text annotations for percentages
+    for i in range(len(labels)):
+        for j in range(len(labels)):
+            val = cm_normalized[i, j]
+            if val > 0.005:  # Only show if > 0.5%
+                color = "white" if val > 0.5 else "black"
+                ax2.text(j, i, f"{val:.2f}", ha="center", va="center", color=color, fontsize=7)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Confusion matrix plot saved to: {output_path}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Analyze predictions from detailed_eval_xlstm.py"
@@ -102,19 +259,19 @@ def parse_args() -> argparse.Namespace:
         "--predictions",
         type=str,
         nargs="+",
-        default=["val_preds.npz", "test_preds.npz"],
+        default=["new_val_preds.npz", "new_test_preds.npz"],
         help="Path(s) to predictions.npz file(s). Multiple files will be aggregated.",
     )
     parser.add_argument(
         "--data_dir",
         type=str,
-        default="/raid/kline/pitchpredict/.pitchpredict_data_fixed",
+        default="/raid/kline/pitchpredict/.pitchpredict_session_data",
         help="Path to base data directory (contains val/, test/ subdirs)",
     )
     parser.add_argument(
         "--output",
         type=str,
-        default="analyze_val_test_results.json",
+        default="new_analyze_val_test_results.json",
         help="Path to save results JSON",
     )
     parser.add_argument(
@@ -134,6 +291,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="player_names.json",
         help="Path to player name cache file (default: player_names.json)",
+    )
+    parser.add_argument(
+        "--confusion_matrix",
+        type=str,
+        default="pitch_type_confusion.png",
+        help="Path to save confusion matrix plot (default: pitch_type_confusion.png)",
     )
     return parser.parse_args()
 
@@ -215,6 +378,24 @@ def main() -> None:
     print(f"Top-1 accuracy: {overall_accuracy:.4f} ({overall_accuracy*100:.2f}%)")
     print(f"Top-5 accuracy: {overall_top5_accuracy:.4f} ({overall_top5_accuracy*100:.2f}%)")
 
+    # Pitch type confusion matrix
+    print("\nComputing pitch type confusion matrix...")
+    cm, cm_labels, pitch_type_stats = compute_pitch_type_confusion(targets, predictions)
+
+    # Print pitch type stats
+    print(f"\n{'='*80}")
+    print("PITCH TYPE METRICS")
+    print(f"{'='*80}")
+    print(f"{'Type':<6} {'True':>10} {'Pred':>10} {'Correct':>10} {'Prec':>8} {'Recall':>8} {'F1':>8}")
+    print("-" * 80)
+    for label in cm_labels:
+        s = pitch_type_stats[label]
+        print(f"{label:<6} {s['true_count']:>10} {s['pred_count']:>10} {s['correct']:>10} "
+              f"{s['precision']:>8.4f} {s['recall']:>8.4f} {s['f1']:>8.4f}")
+
+    # Plot confusion matrix
+    plot_confusion_matrix(cm, cm_labels, args.confusion_matrix)
+
     # Per-session metrics
     print("\nComputing per-session metrics...")
     session_metrics = compute_session_metrics(
@@ -228,7 +409,9 @@ def main() -> None:
 
     # Collect unique player IDs for name lookup
     pitcher_ids = set(sm["pitcher_id"] for sm in session_metrics)
-    batter_ids = set(sm["batter_id"] for sm in session_metrics)
+    batter_ids = set()
+    for sm in session_metrics:
+        batter_ids.update(sm["batter_ids"])
     all_player_ids = list(pitcher_ids | batter_ids)
 
     # Look up player names
@@ -239,24 +422,36 @@ def main() -> None:
     # Add names to session metrics
     for sm in session_metrics:
         sm["pitcher_name"] = player_names.get(sm["pitcher_id"], f"Unknown ({sm['pitcher_id']})")
-        sm["batter_name"] = player_names.get(sm["batter_id"], f"Unknown ({sm['batter_id']})")
+        sm["batter_names"] = [
+            player_names.get(bid, f"Unknown ({bid})") for bid in sm["batter_ids"]
+        ]
+        sm["batter_name"] = sm["batter_names"][0] if sm["batter_names"] else "Unknown"
 
-    print(f"\n{'='*90}")
+    def format_batters(names: list[str], max_len: int = 40) -> str:
+        """Format list of batter names, truncating if needed."""
+        result = ", ".join(names)
+        if len(result) > max_len:
+            result = result[:max_len - 3] + "..."
+        return result
+
+    print(f"\n{'='*110}")
     print(f"TOP {args.top_n} BEST SESSIONS (highest accuracy)")
-    print(f"{'='*90}")
-    print(f"{'Session':>8}  {'Pitcher':<20} {'vs Batter':<20} {'Date':<12} {'Tokens':>6} {'Acc':>8}")
-    print("-" * 90)
+    print(f"{'='*110}")
+    print(f"{'Session':>8}  {'Pitcher':<20} {'Batters':<40} {'Date':<12} {'Tokens':>6} {'Acc':>8}")
+    print("-" * 110)
     for sm in best_sessions:
-        print(f"{sm['session_id']:>8}  {sm['pitcher_name']:<20} {sm['batter_name']:<20} "
+        batters_str = format_batters(sm['batter_names'])
+        print(f"{sm['session_id']:>8}  {sm['pitcher_name']:<20} {batters_str:<40} "
               f"{sm['game_date']:<12} {sm['n_tokens']:>6} {sm['accuracy']:>8.4f}")
 
-    print(f"\n{'='*90}")
+    print(f"\n{'='*110}")
     print(f"TOP {args.top_n} WORST SESSIONS (lowest accuracy)")
-    print(f"{'='*90}")
-    print(f"{'Session':>8}  {'Pitcher':<20} {'vs Batter':<20} {'Date':<12} {'Tokens':>6} {'Acc':>8}")
-    print("-" * 90)
+    print(f"{'='*110}")
+    print(f"{'Session':>8}  {'Pitcher':<20} {'Batters':<40} {'Date':<12} {'Tokens':>6} {'Acc':>8}")
+    print("-" * 110)
     for sm in worst_sessions:
-        print(f"{sm['session_id']:>8}  {sm['pitcher_name']:<20} {sm['batter_name']:<20} "
+        batters_str = format_batters(sm['batter_names'])
+        print(f"{sm['session_id']:>8}  {sm['pitcher_name']:<20} {batters_str:<40} "
               f"{sm['game_date']:<12} {sm['n_tokens']:>6} {sm['accuracy']:>8.4f}")
 
     # Per-pitcher metrics
@@ -296,6 +491,11 @@ def main() -> None:
             "total_tokens": int(len(targets)),
             "accuracy": overall_accuracy,
             "top5_accuracy": overall_top5_accuracy,
+        },
+        "pitch_type_stats": pitch_type_stats,
+        "pitch_type_confusion_matrix": {
+            "labels": cm_labels,
+            "matrix": cm.tolist(),
         },
         "best_sessions": best_sessions,
         "worst_sessions": worst_sessions,
