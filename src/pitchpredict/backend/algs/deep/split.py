@@ -51,16 +51,19 @@ def _load_context_memmaps(context_prefix: Path, sample_count: int) -> dict[str, 
     return arrays
 
 
-def plate_appearance_ranges(tokens: np.memmap) -> list[tuple[int, int]]:
+def session_ranges(tokens: np.memmap) -> list[tuple[int, int]]:
+    """Return (start, end) ranges for each session (SESSION_START to SESSION_END inclusive)."""
     ranges: list[tuple[int, int]] = []
-    start = 0
-    pa_end_value = PitchToken.PA_END.value
-    for idx, token in enumerate(tokens):
-        if int(token) == pa_end_value:
-            ranges.append((start, idx + 1))
-            start = idx + 1
-    if start < len(tokens):
-        ranges.append((start, len(tokens)))
+    session_starts = np.where(tokens == PitchToken.SESSION_START.value)[0]
+    session_ends = np.where(tokens == PitchToken.SESSION_END.value)[0]
+
+    for i, start_idx in enumerate(session_starts):
+        if i < len(session_ends):
+            end_idx = int(session_ends[i]) + 1  # +1 to include SESSION_END token
+        else:
+            end_idx = len(tokens)
+        ranges.append((int(start_idx), end_idx))
+
     return ranges
 
 
@@ -81,7 +84,7 @@ def compute_targets(total_tokens: int, val_ratio: float, test_ratio: float) -> t
 
 
 def select_indices(
-    pa_lengths: Sequence[int],
+    lengths: Sequence[int],
     indices: list[int],
     target_tokens: int,
 ) -> tuple[list[int], int]:
@@ -90,7 +93,7 @@ def select_indices(
     while indices and token_total < target_tokens:
         idx = indices.pop()
         selected.append(idx)
-        token_total += pa_lengths[idx]
+        token_total += lengths[idx]
     return selected, token_total
 
 
@@ -106,7 +109,7 @@ def _write_split_files(
     ordered_indices = sorted(indices)
     token_count = sum(ranges[idx][1] - ranges[idx][0] for idx in ordered_indices)
     logger.info(
-        "Writing %s split: %d tokens across %d plate appearances",
+        "Writing %s split: %d tokens across %d sessions",
         split_name,
         token_count,
         len(ordered_indices),
@@ -207,8 +210,8 @@ def split_saved_dataset(
         _close_memmaps(tokens_memmap, context_arrays)
         return {"train": 0, "val": 0, "test": 0}
 
-    pa_ranges = plate_appearance_ranges(tokens_memmap)
-    pa_lengths = [end - start for start, end in pa_ranges]
+    sess_ranges = session_ranges(tokens_memmap)
+    sess_lengths = [end - start for start, end in sess_ranges]
 
     val_target, test_target = compute_targets(len(tokens_memmap), val_ratio, test_ratio)
     logger.info(
@@ -219,12 +222,12 @@ def split_saved_dataset(
         test_ratio * 100,
     )
 
-    pa_indices = list(range(len(pa_ranges)))
-    random.Random(seed).shuffle(pa_indices)
+    sess_indices = list(range(len(sess_ranges)))
+    random.Random(seed).shuffle(sess_indices)
 
-    val_indices, _ = select_indices(pa_lengths, pa_indices, val_target)
-    test_indices, _ = select_indices(pa_lengths, pa_indices, test_target)
-    train_indices = pa_indices  # remaining
+    val_indices, _ = select_indices(sess_lengths, sess_indices, val_target)
+    test_indices, _ = select_indices(sess_lengths, sess_indices, test_target)
+    train_indices = sess_indices  # remaining
 
     val_dir = _prepare_split_dir(base_dir, "val", overwrite)
     test_dir = _prepare_split_dir(base_dir, "test", overwrite)
@@ -234,27 +237,27 @@ def split_saved_dataset(
     _cleanup_split_files(train_tokens_tmp, train_context_prefix_tmp)
 
     try:
-        train_token_count, train_pa_count = _write_split_files(
+        train_token_count, train_sess_count = _write_split_files(
             "train",
-            pa_ranges,
+            sess_ranges,
             train_indices,
             tokens_memmap,
             context_arrays,
             train_tokens_tmp,
             train_context_prefix_tmp,
         )
-        val_token_count, val_pa_count = _write_split_files(
+        val_token_count, val_sess_count = _write_split_files(
             "val",
-            pa_ranges,
+            sess_ranges,
             val_indices,
             tokens_memmap,
             context_arrays,
             val_dir / tokens_path.name,
             val_dir / context_prefix.name,
         )
-        test_token_count, test_pa_count = _write_split_files(
+        test_token_count, test_sess_count = _write_split_files(
             "test",
-            pa_ranges,
+            sess_ranges,
             test_indices,
             tokens_memmap,
             context_arrays,
@@ -272,13 +275,13 @@ def split_saved_dataset(
     )
 
     logger.info(
-        "Actual token counts -> train: %d (%d PA) val: %d (%d PA) test: %d (%d PA)",
+        "Actual token counts -> train: %d (%d sessions) val: %d (%d sessions) test: %d (%d sessions)",
         train_token_count,
-        train_pa_count,
+        train_sess_count,
         val_token_count,
-        val_pa_count,
+        val_sess_count,
         test_token_count,
-        test_pa_count,
+        test_sess_count,
     )
 
     logger.info(

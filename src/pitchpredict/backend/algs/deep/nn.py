@@ -315,15 +315,24 @@ def _log_dataset_write(label: str, path_tokens: str, context_paths: list[str], t
         logger.info("[%s] Size per pitch: %.2f KB", label, size_per_pitch / 1024)
 
 
-def _plate_appearance_spans(tokens: Sequence[PitchToken]) -> list[tuple[int, int]]:
+def _session_spans(tokens: Sequence[PitchToken]) -> list[tuple[int, int]]:
+    """Return (start, end) spans for each session (SESSION_START to SESSION_END inclusive)."""
     spans: list[tuple[int, int]] = []
-    start = 0
+    session_start_value = PitchToken.SESSION_START
+    session_end_value = PitchToken.SESSION_END
+
+    current_start: int | None = None
     for idx, token in enumerate(tokens):
-        if token == PitchToken.PA_END:
-            spans.append((start, idx + 1))
-            start = idx + 1
-    if start < len(tokens):
-        spans.append((start, len(tokens)))
+        if token == session_start_value:
+            current_start = idx
+        elif token == session_end_value and current_start is not None:
+            spans.append((current_start, idx + 1))  # +1 to include SESSION_END
+            current_start = None
+
+    # Handle unclosed session at end of data
+    if current_start is not None:
+        spans.append((current_start, len(tokens)))
+
     return spans
 
 
@@ -344,7 +353,7 @@ def _compute_split_targets(total_tokens: int, val_ratio: float, test_ratio: floa
 
 
 def _select_indices(
-    pa_lengths: Sequence[int],
+    lengths: Sequence[int],
     indices: list[int],
     target_tokens: int,
 ) -> tuple[list[int], int]:
@@ -353,7 +362,7 @@ def _select_indices(
     while indices and token_total < target_tokens:
         idx = indices.pop()
         selected.append(idx)
-        token_total += pa_lengths[idx]
+        token_total += lengths[idx]
     return selected, token_total
 
 
@@ -379,17 +388,17 @@ def _split_tokens_and_contexts(
     test_ratio: float,
     seed: int,
 ) -> dict[str, tuple[list[PitchToken], list[PitchContext]]]:
-    spans = _plate_appearance_spans(tokens)
-    pa_lengths = [end - start for start, end in spans]
+    spans = _session_spans(tokens)
+    sess_lengths = [end - start for start, end in spans]
 
     val_target, test_target = _compute_split_targets(len(tokens), val_ratio, test_ratio)
 
-    pa_indices = list(range(len(spans)))
-    random.Random(seed).shuffle(pa_indices)
+    sess_indices = list(range(len(spans)))
+    random.Random(seed).shuffle(sess_indices)
 
-    val_indices, _ = _select_indices(pa_lengths, pa_indices, val_target)
-    test_indices, _ = _select_indices(pa_lengths, pa_indices, test_target)
-    train_indices = pa_indices  # remaining
+    val_indices, _ = _select_indices(sess_lengths, sess_indices, val_target)
+    test_indices, _ = _select_indices(sess_lengths, sess_indices, test_target)
+    train_indices = sess_indices  # remaining
 
     train_split = _materialize_split(tokens, contexts, spans, train_indices)
     val_split = _materialize_split(tokens, contexts, spans, val_indices)

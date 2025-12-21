@@ -7,8 +7,10 @@ import torch
 from pitchpredict.backend.algs.deep.nn import _CONTEXT_FIELD_SPECS, _context_field_path, TOKEN_DTYPE
 from pitchpredict.backend.algs.deep.types import PitchToken
 
-# Token value for SESSION_START (used for session-boundary-aligned sampling)
+# Token values for session boundary detection
 SESSION_START_TOKEN = PitchToken.SESSION_START.value
+SESSION_END_TOKEN = PitchToken.SESSION_END.value
+PAD_TOKEN = PitchToken.PAD.value
 
 class PackedPitchChunk(NamedTuple): # keep parallel with nn._CONTEXT_FIELD_SPECS
     x: torch.LongTensor
@@ -115,15 +117,15 @@ def chunk_to_context(chunk: PackedPitchChunk, device: torch.device) -> PackedPit
 
 class PackedPitchDataset(Dataset):
     """
-    Dataset that samples fixed-length chunks aligned to session boundaries.
+    Dataset that samples fixed-length chunks from sessions, padding at session boundaries.
 
-    Each chunk starts at a SESSION_START token, ensuring that when indices are
-    shuffled, we shuffle which session to start from rather than arbitrary
-    token positions. This preserves the semantic structure of the data.
+    Chunks never cross SESSION_END boundaries. Short sessions are padded to seq_len.
+    Long sessions are split into multiple chunks, with the final chunk padded.
+    This ensures full data coverage while maintaining clean session boundaries.
     """
 
     def __init__(self, data_dir: str, seq_len: int, tokens_file: str = "pitch_seq.bin", context_prefix: str = "pitch_context"):
-        self.contexts = {}
+        self.contexts: dict[str, np.memmap] = {}
         self.tokens = np.memmap(os.path.join(data_dir, tokens_file), dtype=TOKEN_DTYPE, mode="r")
         self.L = int(seq_len)
         context_prefix = os.path.join(data_dir, context_prefix)
@@ -140,50 +142,61 @@ class PackedPitchDataset(Dataset):
             self.contexts[field_name] = np.memmap(path, dtype=spec.dtype, mode="r")
         self.total_tokens = int(self.tokens.size)
 
-        # Find all SESSION_START positions for session-boundary-aligned sampling
-        self.session_starts = np.where(self.tokens == SESSION_START_TOKEN)[0]
+        # Find session boundaries
+        session_starts = np.where(self.tokens == SESSION_START_TOKEN)[0]
+        session_ends = np.where(self.tokens == SESSION_END_TOKEN)[0]
 
-        if len(self.session_starts) == 0:
-            # Fallback to old behavior if no session tokens found (legacy dataset)
-            self.session_starts = np.arange(0, max(1, self.total_tokens - self.L), self.L)
+        if len(session_starts) == 0:
+            # Fallback for legacy datasets without session tokens
+            self.chunks = [(0, self.total_tokens)]
+        else:
+            # Build chunk list: (start_pos, end_pos) for each chunk
+            # Each session can produce multiple chunks if longer than seq_len
+            self.chunks: list[tuple[int, int]] = []
 
-        self.num_sessions = len(self.session_starts)
+            for i, sess_start in enumerate(session_starts):
+                # Session ends at SESSION_END (inclusive) or end of data
+                if i < len(session_ends):
+                    sess_end = int(session_ends[i]) + 1  # +1 to include SESSION_END token
+                else:
+                    sess_end = self.total_tokens
 
-    def set_offset(self, _offset: int) -> None:
-        # No longer used for session-aligned sampling, kept for API compatibility
-        pass
+                session_len = sess_end - sess_start
+
+                # Create chunks for this session
+                offset = 0
+                while offset < session_len:
+                    chunk_start = int(sess_start) + offset
+                    chunk_end = min(chunk_start + self.L, sess_end)
+                    # Only add chunk if it has at least 2 tokens (for x and y)
+                    if chunk_end - chunk_start >= 2:
+                        self.chunks.append((chunk_start, chunk_end))
+                    offset += self.L
 
     def __len__(self) -> int:
-        return self.num_sessions
+        return len(self.chunks)
 
     def __getitem__(self, index: int) -> PackedPitchChunk:
-        if index < 0 or index >= self.num_sessions:
-            raise IndexError(f"index {index} out of range for PackedPitchDataset with {self.num_sessions} sessions")
+        if index < 0 or index >= len(self.chunks):
+            raise IndexError(f"index {index} out of range for PackedPitchDataset with {len(self.chunks)} chunks")
 
-        # Start at the session boundary
-        start = int(self.session_starts[index])
-        end = min(start + self.L + 1, self.total_tokens)
+        start, end = self.chunks[index]
 
-        # Handle case where remaining tokens are less than seq_len + 1
-        actual_len = end - start
-        if actual_len < 2:
-            # Need at least 2 tokens for x and y
-            # Fall back to a valid session
-            start = int(self.session_starts[0])
-            end = min(start + self.L + 1, self.total_tokens)
+        # Get tokens for this chunk (need L+1 for x and y)
+        # But don't exceed the session boundary (end)
+        tok_end = min(start + self.L + 1, end)
+        chunk_tok = torch.from_numpy(self.tokens[start:tok_end].astype(np.int64))
 
-        chunk_tok = torch.from_numpy(self.tokens[start:end].astype(np.int64))
-
-        # Pad if necessary (when near end of dataset)
+        # Pad tokens if necessary
         if len(chunk_tok) < self.L + 1:
             pad_len = self.L + 1 - len(chunk_tok)
-            chunk_tok = torch.cat([chunk_tok, torch.zeros(pad_len, dtype=torch.int64)])
+            chunk_tok = torch.cat([chunk_tok, torch.full((pad_len,), PAD_TOKEN, dtype=torch.int64)])
 
         x = chunk_tok[:-1]
         y = chunk_tok[1:]
 
-        # Get context slice, handling padding when near end of dataset
-        ctx_end = min(start + self.L, self.total_tokens)
+        # Get context slice (length L, not L+1)
+        ctx_end = min(start + self.L, end)
 
         def get_ctx(field_name: str, dtype) -> torch.Tensor:
             data = self.contexts[field_name][start:ctx_end]

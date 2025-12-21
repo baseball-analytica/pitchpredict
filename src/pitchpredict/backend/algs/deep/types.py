@@ -275,6 +275,7 @@ class TokenCategory(Enum):
     """
     Categories for grouping PitchToken values by their semantic role.
     """
+    PAD = auto()
     SESSION_START = auto()
     SESSION_END = auto()
     PA_START = auto()
@@ -299,6 +300,7 @@ class TokenCategory(Enum):
 
 # Token range boundaries (inclusive) for category classification
 _TOKEN_RANGES: list[tuple[PitchToken, PitchToken, TokenCategory]] = [
+    (PitchToken.PAD, PitchToken.PAD, TokenCategory.PAD),
     (PitchToken.SESSION_START, PitchToken.SESSION_START, TokenCategory.SESSION_START),
     (PitchToken.SESSION_END, PitchToken.SESSION_END, TokenCategory.SESSION_END),
     (PitchToken.PA_START, PitchToken.PA_START, TokenCategory.PA_START),
@@ -358,6 +360,7 @@ def get_tokens_in_category(category: TokenCategory) -> list[PitchToken]:
 
 # Grammar: maps each category to valid next token categories
 _NEXT_CATEGORY: dict[TokenCategory, list[TokenCategory]] = {
+    TokenCategory.PAD: [],  # PAD is not part of the grammar, no valid next tokens
     TokenCategory.SESSION_START: [TokenCategory.PA_START, TokenCategory.SESSION_END],
     TokenCategory.PA_START: [TokenCategory.PITCH_TYPE],
     TokenCategory.PITCH_TYPE: [TokenCategory.SPEED],
