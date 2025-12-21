@@ -223,12 +223,24 @@ async def _build_pitch_tokens_and_contexts(
 
             session_key = (int(row["game_pk"]), int(row["pitcher"]))
             if session_key != current_session:
-                if current_session is not None:
+                if current_session is not None and last_context is not None:
+                    # Close previous session
+                    if not last_pa_closed:
+                        pitch_tokens.append(PitchToken.PA_END)
+                        pitch_contexts.append(last_context)
+                        stats.plate_appearance_ends += 1
+                        last_pa_closed = True
+                    pitch_tokens.append(PitchToken.SESSION_END)
+                    pitch_contexts.append(last_context)
                     stats.session_ends += 1
                 stats.session_starts += 1
                 current_session = session_key
 
             tokens_this_pitch: list[PitchToken] = []
+
+            # Emit SESSION_START at the beginning of a new session
+            if len(pitch_tokens) == 0 or pitch_tokens[-1] == PitchToken.SESSION_END:
+                tokens_this_pitch.append(PitchToken.SESSION_START)
 
             pa_key = (int(row["game_pk"]), int(row["at_bat_number"]))
             if pa_key != last_pa_key:
@@ -540,13 +552,16 @@ async def _build_pitch_tokens_and_contexts(
             logger.error(f"error tokenizing pitch {i}: {e}")
             continue
 
-    if current_session is not None:
-        stats.session_ends += 1
-
-    if not last_pa_closed and last_context is not None:
-        pitch_tokens.append(PitchToken.PA_END)
+    # Close final session
+    if current_session is not None and last_context is not None:
+        if not last_pa_closed:
+            pitch_tokens.append(PitchToken.PA_END)
+            pitch_contexts.append(last_context)
+            stats.plate_appearance_ends += 1
+            last_pa_closed = True
+        pitch_tokens.append(PitchToken.SESSION_END)
         pitch_contexts.append(last_context)
-        stats.plate_appearance_ends += 1
+        stats.session_ends += 1
 
     stats.validate()
     logger.info(
@@ -649,7 +664,6 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
         "fielder_7",
         "fielder_8",
         "fielder_9",
-        "umpire",
         "batter_days_since_prev_game",
         "pitcher_days_since_prev_game",
         "at_bat_number",
@@ -683,7 +697,6 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
         "fielder_7",
         "fielder_8",
         "fielder_9",
-        "umpire",
         "batter_days_since_prev_game",
         "pitcher_days_since_prev_game",
     ]
