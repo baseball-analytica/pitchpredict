@@ -89,7 +89,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default="/raid/kline/pitchpredict/.pitchpredict_data",
+        default="/raid/kline/pitchpredict/.pitchpredict_data_fixed",
         help="Base data directory (default: %(default)s).",
     )
     parser.add_argument(

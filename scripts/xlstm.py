@@ -909,10 +909,10 @@ def evaluate(
             with torch.amp.autocast("cuda", dtype=autocast_dtype):
                 logits = model(x, x_ctx)
                 loss = F.cross_entropy(
-                    logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum"
+                    logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum", ignore_index=0
                 )
             total_nll += loss.item()
-            total_tokens += y.numel()
+            total_tokens += (y != 0).sum().item()  # don't count PAD tokens
     nll = total_nll / max(1, total_tokens)
     bpb = nll_to_bpb(nll)
     model.train()
@@ -1064,6 +1064,7 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
                             logits.view(-1, logits.size(-1)),
                             y.view(-1),
                             reduction="mean",
+                            ignore_index=0,
                         )
                         / cfg.grad_accum_steps
                     )

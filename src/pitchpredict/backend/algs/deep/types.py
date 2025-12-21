@@ -10,6 +10,7 @@ import torch
 
 
 class PitchToken(Enum):
+    PAD = 0  # padding token for sequences shorter than seq_len
     SESSION_START = auto() # when a pitcher enters a game
     SESSION_END = auto() # when the pitcher leaves the game
     PA_START = auto() # start of a plate appearance
