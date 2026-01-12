@@ -12,7 +12,8 @@ description = "Predict MLB pitcher/batter behavior and outcomes using a given co
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-    { name = "Addison Kline", email = "akline@baseball-analytica.com" }
+    { name = "Addison Kline", email = "akline@baseball-analytica.com" },
+    { name = "Ryan Heaton", email = "ryan@charon-labs.com" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
