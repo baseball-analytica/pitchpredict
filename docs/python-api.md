@@ -217,6 +217,94 @@ asyncio.run(main())
 
 ---
 
+### predict_batted_ball
+
+Predict batted ball outcome probabilities given exit velocity, launch angle, and optional game context.
+
+```python
+async def predict_batted_ball(
+    launch_speed: float,
+    launch_angle: float,
+    algorithm: str,
+    spray_angle: float | None = None,
+    bb_type: str | None = None,
+    outs: int | None = None,
+    bases_state: int | None = None,
+    batter_id: int | None = None,
+    game_date: str | None = None,
+) -> dict[str, Any]
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `launch_speed` | `float` | Yes | Exit velocity in mph |
+| `launch_angle` | `float` | Yes | Launch angle in degrees (-90 to 90) |
+| `algorithm` | `str` | Yes | Algorithm to use: `"similarity"` |
+| `spray_angle` | `float` | No | Horizontal direction (-45 to 45, 0 = center field) |
+| `bb_type` | `str` | No | Batted ball type: `"ground_ball"`, `"line_drive"`, `"fly_ball"`, `"popup"` |
+| `outs` | `int` | No | Current outs (0-2) |
+| `bases_state` | `int` | No | Bases occupied bitmask (1=1B, 2=2B, 4=3B) |
+| `batter_id` | `int` | No | MLBAM batter ID |
+| `game_date` | `str` | No | Game date in "YYYY-MM-DD" format |
+
+#### Returns
+
+A dictionary containing:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `basic_outcome_data` | `dict` | Outcome probabilities, hit probability, xBA, inferred batted ball type |
+| `detailed_outcome_data` | `dict` | Sample statistics, expected stats (xBA, xSLG, xwOBA) |
+| `prediction_metadata` | `dict` | Sample size and similarity weights |
+
+#### Example
+
+```python
+import asyncio
+from pitchpredict import PitchPredict
+
+async def main():
+    client = PitchPredict()
+
+    # Basic prediction with just exit velocity and launch angle
+    result = await client.predict_batted_ball(
+        launch_speed=95.0,
+        launch_angle=18.0,
+        algorithm="similarity"
+    )
+
+    # Outcome probabilities
+    print(result["basic_outcome_data"]["outcome_probs"])
+    # {'single': 0.18, 'double': 0.08, 'triple': 0.01, 'home_run': 0.05, ...}
+
+    # Hit probability
+    print(result["basic_outcome_data"]["hit_probability"])
+    # 0.32
+
+    # Expected batting average
+    print(result["basic_outcome_data"]["xba"])
+    # 0.285
+
+    # With game context for context-aware filtering
+    result = await client.predict_batted_ball(
+        launch_speed=102.0,
+        launch_angle=25.0,
+        algorithm="similarity",
+        outs=1,
+        bases_state=5  # runners on 1B and 3B
+    )
+
+    # sac_fly will be included (outs < 2 and runner on 3B)
+    # double_play will be included (runners on base)
+    print(result["basic_outcome_data"]["outcome_probs"])
+
+asyncio.run(main())
+```
+
+---
+
 ## Response Data Structures
 
 ### basic_pitch_data
@@ -327,6 +415,61 @@ asyncio.run(main())
     "n_pitches_total": 5000,       # Total pitches analyzed
     "n_pitches_sampled": 250,      # Pitches in sample
     "sample_pctg": 0.05            # Sample percentage
+}
+```
+
+### batted_ball_basic_outcome_data
+
+```python
+{
+    "outcome_probs": {
+        "single": 0.18,
+        "double": 0.08,
+        "triple": 0.01,
+        "home_run": 0.05,
+        "groundout": 0.25,
+        "flyout": 0.20,
+        "lineout": 0.08,
+        "popout": 0.02,
+        "sac_fly": 0.03,       # Only if outs < 2 AND runner on 3B
+        "double_play": 0.04,   # Only if runners on base
+        "field_error": 0.02,
+        "force_out": 0.04      # Only if force play possible
+    },
+    "hit_probability": 0.32,       # Probability of a hit
+    "xba": 0.285,                  # Expected batting average
+    "bb_type_inferred": "line_drive"  # Inferred from launch angle
+}
+```
+
+### batted_ball_detailed_outcome_data
+
+```python
+{
+    "sample_launch_speed_mean": 98.5,   # Mean EV of similar batted balls
+    "sample_launch_angle_mean": 15.2,   # Mean LA of similar batted balls
+    "expected_stats": {
+        "xBA": 0.285,              # Expected batting average
+        "xSLG": 0.520,             # Expected slugging
+        "xwOBA": 0.380             # Expected wOBA
+    }
+}
+```
+
+### batted_ball_prediction_metadata
+
+```python
+{
+    "n_batted_balls_sampled": 750,   # Number of similar batted balls
+    "sample_pctg": 0.05,             # Sample percentage
+    "similarity_weights": {
+        "launch_speed": 0.45,        # Exit velocity weight
+        "launch_angle": 0.40,        # Launch angle weight
+        "spray_angle": 0.05,         # Spray angle weight
+        "bases_state": 0.05,         # Bases state weight
+        "outs": 0.03,                # Outs weight
+        "date": 0.02                 # Date recency weight
+    }
 }
 ```
 

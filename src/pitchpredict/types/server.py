@@ -43,3 +43,24 @@ class PredictBatterResponse(BaseModel):
     detailed_outcome_data: dict[str, Any]
     prediction_metadata: dict[str, Any]
 
+
+class PredictBattedBallRequest(BaseModel):
+    # Required fields
+    launch_speed: float
+    launch_angle: float
+    algorithm: str
+
+    # Optional fields
+    spray_angle: float | None = None
+    bb_type: str | None = None
+    outs: int | None = None
+    bases_state: int | None = None
+    batter_id: int | None = None
+    game_date: str | None = None
+
+
+class PredictBattedBallResponse(BaseModel):
+    basic_outcome_data: dict[str, Any]
+    detailed_outcome_data: dict[str, Any]
+    prediction_metadata: dict[str, Any]
+

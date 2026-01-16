@@ -13,6 +13,7 @@ Cutting-edge MLB pitch-predicting software utilizing the latest Statcast data. O
 - **Two prediction algorithms**: Similarity-based (nearest neighbor) and deep learning (xLSTM)
 - **Multiple interfaces**: Python API, REST API server, and CLI
 - **Rich predictions**: Pitch type probabilities, speed/location distributions, outcome analysis
+- **Batted ball predictions**: Outcome probabilities from exit velocity and launch angle with context-aware filtering
 - **Statcast powered**: Uses MLB's comprehensive pitch tracking data via [pybaseball]
 
 ## Installation
@@ -93,6 +94,18 @@ curl -X POST http://localhost:8056/predict/pitcher \
   }'
 ```
 
+Predict batted ball outcomes:
+
+```bash
+curl -X POST http://localhost:8056/predict/batted-ball \
+  -H "Content-Type: application/json" \
+  -d '{
+    "launch_speed": 95.0,
+    "launch_angle": 18.0,
+    "algorithm": "similarity"
+  }'
+```
+
 ## Documentation
 
 Full documentation is available in the [docs/](docs/) folder:
@@ -124,6 +137,14 @@ Finds historical pitches most similar to the current game context using weighted
 - Batting team score: 10%
 - Fielding team score: 10%
 - Game date: 5%
+
+**Similarity weights for batted ball predictions:**
+- Exit velocity: 45% (continuous, 15 mph tolerance)
+- Launch angle: 40% (continuous, 20° tolerance)
+- Spray angle: 5%
+- Bases state: 5%
+- Outs: 3%
+- Date recency: 2%
 
 ### Deep Learning Algorithm
 

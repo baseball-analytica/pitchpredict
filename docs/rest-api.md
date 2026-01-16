@@ -250,6 +250,125 @@ curl -X POST http://localhost:8056/predict/batter \
 
 ---
 
+### POST /predict/batted-ball
+
+Predict batted ball outcome probabilities given exit velocity, launch angle, and optional game context.
+
+**Request Body:**
+
+```json
+{
+  "launch_speed": 95.0,
+  "launch_angle": 18.0,
+  "algorithm": "similarity",
+  "spray_angle": 10.0,
+  "bb_type": "line_drive",
+  "outs": 1,
+  "bases_state": 5,
+  "batter_id": 592450,
+  "game_date": "2024-06-15"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `launch_speed` | float | Yes | Exit velocity in mph |
+| `launch_angle` | float | Yes | Launch angle in degrees (-90 to 90) |
+| `algorithm` | string | Yes | `"similarity"` (only option for now) |
+| `spray_angle` | float | No | Horizontal direction (-45 to 45, 0 = center field) |
+| `bb_type` | string | No | Batted ball type: `"ground_ball"`, `"line_drive"`, `"fly_ball"`, `"popup"` |
+| `outs` | integer | No | Current outs (0-2) |
+| `bases_state` | integer | No | Bases occupied bitmask (1=1B, 2=2B, 4=3B, e.g., 5 = runners on 1B and 3B) |
+| `batter_id` | integer | No | MLBAM batter ID |
+| `game_date` | string | No | Date in "YYYY-MM-DD" format |
+
+**Response:**
+
+```json
+{
+  "basic_outcome_data": {
+    "outcome_probs": {
+      "single": 0.18,
+      "double": 0.08,
+      "triple": 0.01,
+      "home_run": 0.05,
+      "groundout": 0.25,
+      "flyout": 0.20,
+      "lineout": 0.08,
+      "popout": 0.02,
+      "sac_fly": 0.03,
+      "double_play": 0.04,
+      "field_error": 0.02,
+      "force_out": 0.04
+    },
+    "hit_probability": 0.32,
+    "xba": 0.285,
+    "bb_type_inferred": "line_drive"
+  },
+  "detailed_outcome_data": {
+    "sample_launch_speed_mean": 98.5,
+    "sample_launch_angle_mean": 15.2,
+    "expected_stats": {
+      "xBA": 0.285,
+      "xSLG": 0.520,
+      "xwOBA": 0.380
+    }
+  },
+  "prediction_metadata": {
+    "n_batted_balls_sampled": 750,
+    "sample_pctg": 0.05,
+    "similarity_weights": {
+      "launch_speed": 0.45,
+      "launch_angle": 0.40,
+      "spray_angle": 0.05,
+      "bases_state": 0.05,
+      "outs": 0.03,
+      "date": 0.02
+    }
+  }
+}
+```
+
+**Context-Aware Outcome Filtering:**
+
+When game context is provided, outcomes are filtered to only include logically possible results:
+
+| Outcome | Condition |
+|---------|-----------|
+| `sac_fly` | `outs < 2` AND runner on 3B (`bases_state & 4`) |
+| `double_play` | At least one runner on base (`bases_state > 0`) |
+| `force_out` | Force play possible (runner on 1B) |
+
+If no game context is provided, all outcomes are included with full historical probabilities.
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8056/predict/batted-ball \
+  -H "Content-Type: application/json" \
+  -d '{
+    "launch_speed": 95.0,
+    "launch_angle": 18.0,
+    "algorithm": "similarity"
+  }'
+```
+
+**Example with game context:**
+
+```bash
+curl -X POST http://localhost:8056/predict/batted-ball \
+  -H "Content-Type: application/json" \
+  -d '{
+    "launch_speed": 102.0,
+    "launch_angle": 25.0,
+    "algorithm": "similarity",
+    "outs": 1,
+    "bases_state": 5
+  }'
+```
+
+---
+
 ## OpenAPI Documentation
 
 When the server is running, interactive API documentation is available at:

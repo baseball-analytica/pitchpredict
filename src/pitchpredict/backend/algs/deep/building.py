@@ -708,10 +708,10 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
     cleaned = pitches.dropna(subset=essential_columns).copy()
 
     for col in fill_zero_int_columns:
-        cleaned[col] = cleaned[col].fillna(0).astype(int)
+        cleaned[col] = cleaned[col].astype("Int64").fillna(0).astype(int)
 
     for col in fill_zero_float_columns:
-        cleaned[col] = cleaned[col].fillna(0.0)
+        cleaned[col] = cleaned[col].astype("Float64").fillna(0.0).astype(float)
 
     logger.debug("_clean_pitch_rows completed successfully")
     return cleaned.reset_index(drop=True)

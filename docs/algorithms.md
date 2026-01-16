@@ -83,9 +83,46 @@ For `predict_batter`, additional pitch characteristics are considered:
 | Pitch horizontal location | 5% |
 | Pitch vertical location | 5% |
 
+### Batted Ball Prediction Weights
+
+For `predict_batted_ball`, the algorithm uses **continuous similarity scores** (unlike the binary matching above):
+
+| Factor | Weight | Scoring |
+|--------|--------|---------|
+| Exit velocity | 45% | `max(0, 1 - abs(diff) / 15.0)` — 15 mph tolerance |
+| Launch angle | 40% | `max(0, 1 - abs(diff) / 20.0)` — 20° tolerance |
+| Spray angle | 5% | `max(0, 1 - abs(diff) / 30.0)` — if provided |
+| Bases state | 5% | 1.0 if exact match, 0.5 if both have runners, else 0.0 |
+| Outs | 3% | Same outs = 1.0, different = 0.0 |
+| Date | 2% | `max(0, 1 - abs(days_diff) / 365.0)` — recency bonus |
+
+**Similarity formula:**
+
+```
+ev_score = max(0, 1 - abs(ev_diff) / 15.0)
+la_score = max(0, 1 - abs(la_diff) / 20.0)
+
+similarity = 0.45 * ev_score +
+             0.40 * la_score +
+             0.05 * spray_score +
+             0.05 * bases_score +
+             0.03 * outs_score +
+             0.02 * date_score
+```
+
+**Context-aware outcome filtering:**
+
+When game context is provided, impossible outcomes are filtered:
+
+| Outcome | Condition to include |
+|---------|---------------------|
+| `sac_fly` | `outs < 2` AND runner on 3B |
+| `double_play` | At least one runner on base |
+| `force_out` | Runner on 1B (force play possible) |
+
 ### Sample Percentage
 
-By default, the algorithm samples the top 5% most similar pitches. This can be configured:
+By default, the algorithm samples the top 5% most similar pitches (minimum 100 for batted balls). This can be configured:
 
 ```python
 from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
