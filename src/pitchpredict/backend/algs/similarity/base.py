@@ -49,7 +49,11 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             pitcher_id = await get_player_id_from_name(pitcher_name)
             batter_id = await get_player_id_from_name(batter_name)
 
-            pitches = await get_pitches_from_pitcher(pitcher_id, game_date)
+            pitches = await get_pitches_from_pitcher(
+                pitcher_id=pitcher_id,
+                start_date="2015-01-01",
+                end_date=game_date,
+            )
             self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
 
             similar_pitches = await self._get_similar_pitches_for_pitcher(
