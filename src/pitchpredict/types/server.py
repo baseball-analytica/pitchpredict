@@ -34,7 +34,7 @@ class PredictBatterRequest(BaseModel):
     pitch_type: str
     pitch_speed: float
     pitch_x: float
-    pitch_y: float
+    pitch_z: float
     algorithm: str
 
 

@@ -101,7 +101,7 @@ async def predict_batter_endpoint(request: server_types.PredictBatterRequest) ->
             pitch_type=request.pitch_type,
             pitch_speed=request.pitch_speed,
             pitch_x=request.pitch_x,
-            pitch_y=request.pitch_y,
+            pitch_z=request.pitch_z,
             algorithm=request.algorithm,
         )
         return server_types.PredictBatterResponse(

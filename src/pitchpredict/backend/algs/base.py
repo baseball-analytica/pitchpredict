@@ -47,7 +47,7 @@ class PitchPredictAlgorithm:
         pitch_type: str,
         pitch_speed: float,
         pitch_x: float,
-        pitch_y: float,
+        pitch_z: float,
     ) -> dict[str, Any]:
         """
         Predict the batter's next outcome.

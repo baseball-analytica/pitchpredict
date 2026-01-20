@@ -129,7 +129,7 @@ class PitchPredict:
         pitch_type: str,
         pitch_speed: float,
         pitch_x: float,
-        pitch_y: float,
+        pitch_z: float,
         algorithm: str,
     ) -> dict[str, Any]:
         """
@@ -155,7 +155,7 @@ class PitchPredict:
                 pitch_type=pitch_type,
                 pitch_speed=pitch_speed,
                 pitch_x=pitch_x,
-                pitch_y=pitch_y,
+                pitch_z=pitch_z,
             )
             self.logger.debug("predict_batter completed")
             return result
