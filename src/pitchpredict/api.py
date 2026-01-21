@@ -129,7 +129,7 @@ class PitchPredict:
         pitch_type: str,
         pitch_speed: float,
         pitch_x: float,
-        pitch_y: float,
+        pitch_z: float,
         algorithm: str,
     ) -> dict[str, Any]:
         """
@@ -155,9 +155,52 @@ class PitchPredict:
                 pitch_type=pitch_type,
                 pitch_speed=pitch_speed,
                 pitch_x=pitch_x,
-                pitch_y=pitch_y,
+                pitch_z=pitch_z,
             )
             self.logger.debug("predict_batter completed")
+            return result
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def predict_batted_ball(
+        self,
+        launch_speed: float,
+        launch_angle: float,
+        algorithm: str,
+        spray_angle: float | None = None,
+        bb_type: str | None = None,
+        outs: int | None = None,
+        bases_state: int | None = None,
+        batter_id: int | None = None,
+        game_date: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Given batted ball parameters, predict outcome probabilities.
+        """
+        self.logger.debug("predict_batted_ball called")
+
+        alg = self.algorithms.get(algorithm)
+        if alg is None:
+            self.logger.error(f"unrecognized algorithm: {algorithm}")
+            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {algorithm}")
+        self.logger.debug(f"using algorithm: {algorithm}")
+
+        try:
+            result = await alg.predict_batted_ball(
+                launch_speed=launch_speed,
+                launch_angle=launch_angle,
+                spray_angle=spray_angle,
+                bb_type=bb_type,
+                outs=outs,
+                bases_state=bases_state,
+                batter_id=batter_id,
+                game_date=game_date,
+            )
+            self.logger.debug("predict_batted_ball completed")
             return result
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")

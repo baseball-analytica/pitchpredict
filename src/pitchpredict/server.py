@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
@@ -11,15 +12,17 @@ import pitchpredict.utils as utils
 import pitchpredict.types.server as server_types
 
 
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Handle server startup and shutdown events.
     """
     await _server_startup(app)
 
-    yield
-
-    await _server_shutdown(app)
+    try:
+        yield
+    finally:
+        await _server_shutdown(app)
 
 
 async def _server_startup(app: FastAPI):
@@ -98,10 +101,39 @@ async def predict_batter_endpoint(request: server_types.PredictBatterRequest) ->
             pitch_type=request.pitch_type,
             pitch_speed=request.pitch_speed,
             pitch_x=request.pitch_x,
-            pitch_y=request.pitch_y,
+            pitch_z=request.pitch_z,
             algorithm=request.algorithm,
         )
         return server_types.PredictBatterResponse(
+            basic_outcome_data=result["basic_outcome_data"],
+            detailed_outcome_data=result["detailed_outcome_data"],
+            prediction_metadata=result["prediction_metadata"],
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/predict/batted-ball")
+async def predict_batted_ball_endpoint(request: server_types.PredictBattedBallRequest) -> server_types.PredictBattedBallResponse:
+    """
+    Predict batted ball outcome probabilities given exit velocity, launch angle, and optional game context.
+    """
+    try:
+        api = app.state.api
+        result = await api.predict_batted_ball(
+            launch_speed=request.launch_speed,
+            launch_angle=request.launch_angle,
+            algorithm=request.algorithm,
+            spray_angle=request.spray_angle,
+            bb_type=request.bb_type,
+            outs=request.outs,
+            bases_state=request.bases_state,
+            batter_id=request.batter_id,
+            game_date=request.game_date,
+        )
+        return server_types.PredictBattedBallResponse(
             basic_outcome_data=result["basic_outcome_data"],
             detailed_outcome_data=result["detailed_outcome_data"],
             prediction_metadata=result["prediction_metadata"],

@@ -47,7 +47,7 @@ class PitchPredictAlgorithm:
         pitch_type: str,
         pitch_speed: float,
         pitch_x: float,
-        pitch_y: float,
+        pitch_z: float,
     ) -> dict[str, Any]:
         """
         Predict the batter's next outcome.
@@ -78,5 +78,32 @@ class PitchPredictAlgorithm:
     ) -> dict[str, Any]:
         """
         Get the metadata for the batter prediction, including usage information.
+        """
+        pass
+
+    @abstractmethod
+    async def predict_batted_ball(
+        self,
+        launch_speed: float,
+        launch_angle: float,
+        spray_angle: float | None = None,
+        bb_type: str | None = None,
+        outs: int | None = None,
+        bases_state: int | None = None,
+        batter_id: int | None = None,
+        game_date: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Predict batted ball outcome probabilities given exit velocity, launch angle, and optional context.
+        """
+        pass
+
+    @abstractmethod
+    def get_batted_ball_prediction_metadata(
+        self,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Get the metadata for the batted ball prediction, including usage information.
         """
         pass

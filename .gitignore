@@ -173,6 +173,8 @@ cython_debug/
 .pitchpredict_models/
 .pitchpredict_test/
 .scripts/
+
+# Claude
 .claude/
 
 # Wandb
