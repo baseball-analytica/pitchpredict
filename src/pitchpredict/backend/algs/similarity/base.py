@@ -10,7 +10,8 @@ import pandas as pd
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
 from pitchpredict.backend.fetching import get_pitches_from_pitcher, get_pitches_to_batter, get_player_id_from_name, get_all_batted_balls
-
+import pitchpredict.types.api as api_types
+import pitchpredict.backend.algs.similarity.types as similarity_types
 
 class SimilarityAlgorithm(PitchPredictAlgorithm):
     """
@@ -20,23 +21,16 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     def __init__(
         self,
         name: str = "similarity",
-        sample_pctg: float = 0.05,
         **kwargs: Any,
     ) -> None:
         super().__init__(name, **kwargs)
-        self.sample_pctg = sample_pctg
         self.logger = logging.getLogger("pitchpredict.backend.algs.similarity")
 
     async def predict_pitcher(
         self,
-        pitcher_name: str,
-        batter_name: str,
-        balls: int,
-        strikes: int,
-        score_bat: int,
-        score_fld: int,
-        game_date: str,
-    ) -> dict[str, Any]:
+        request: api_types.PredictPitcherRequest,
+        **kwargs: Any,
+    ) -> api_types.PredictPitcherResponse:
         """
         Predict the pitcher's next pitch and its outcome.
         """
@@ -46,24 +40,22 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             start_time = datetime.now()
             self.logger.debug(f"start time: {start_time}")
 
-            pitcher_id = await get_player_id_from_name(pitcher_name)
-            batter_id = await get_player_id_from_name(batter_name)
+            pitcher_id = request.pitcher_id
+            batter_id = request.batter_id
+
+            weights = similarity_types.SimilarityWeights().softmax()
 
             pitches = await get_pitches_from_pitcher(
                 pitcher_id=pitcher_id,
                 start_date="2015-01-01",
-                end_date=game_date,
+                end_date=request.game_date,
             )
             self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
 
             similar_pitches = await self._get_similar_pitches_for_pitcher(
                 pitches=pitches,
-                batter_id=batter_id,
-                balls=balls,
-                strikes=strikes,
-                score_bat=score_bat,
-                score_fld=score_fld,
-                game_date=game_date
+                context=request,
+                weights=weights,
             )
             self.logger.debug(f"successfully fetched {similar_pitches.shape[0]} similar pitches")
 
@@ -84,14 +76,14 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             self.logger.info("predict_pitcher completed successfully")
 
-            return {
-                "algorithm_metadata": self.get_metadata(),
-                "basic_pitch_data": basic_pitch_data,
-                "detailed_pitch_data": detailed_pitch_data,
-                "basic_outcome_data": basic_outcome_data,
-                "detailed_outcome_data": detailed_outcome_data,
-                "prediction_metadata": prediction_metadata,
-            }
+            return api_types.PredictPitcherResponse(
+                basic_pitch_data=basic_pitch_data,
+                detailed_pitch_data=detailed_pitch_data,
+                basic_outcome_data=basic_outcome_data,
+                detailed_outcome_data=detailed_outcome_data,
+                pitches=similar_pitches,
+                prediction_metadata=prediction_metadata,
+            )
 
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")
@@ -178,12 +170,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     async def _get_similar_pitches_for_pitcher(
         self,
         pitches: pd.DataFrame,
-        batter_id: int,
-        balls: int,
-        strikes: int,
-        score_bat: int,
-        score_fld: int,
-        game_date: str,
+        context: api_types.PredictPitcherRequest,
+        weights: dict[str, float],
     ) -> pd.DataFrame:
         """
         Get the pitches most similar to the given context for this pitcher.
@@ -191,36 +179,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         self.logger.debug("get_similar_pitches_for_pitcher called")
 
         try:
-            # append "similarity score" column to pitches for each parameter
-            # 'score_batter_name': 1 if batter_name is the same as the batter in the pitch, 0 otherwise
-            pitches["score_batter_name"] = pitches["batter"].apply(lambda x: 1 if x == batter_id else 0)
-            # 'score_balls': 1 if balls is the same as the balls in the pitch, 0 otherwise
-            pitches["score_balls"] = pitches["balls"].apply(lambda x: 1 if x == balls else 0)
-            # 'score_strikes': 1 if strikes is the same as the strikes in the pitch, 0 otherwise
-            pitches["score_strikes"] = pitches["strikes"].apply(lambda x: 1 if x == strikes else 0)
-            # 'score_score_bat': 1 if score_bat is the same as the score_bat in the pitch, 0 otherwise
-            pitches["score_score_bat"] = pitches["bat_score"].apply(lambda x: 1 if x == score_bat else 0)
-            # 'score_score_fld': 1 if score_fld is the same as the score_fld in the pitch, 0 otherwise
-            pitches["score_score_fld"] = pitches["fld_score"].apply(lambda x: 1 if x == score_fld else 0)
-            # 'score_game_date': 1 if game_date is the same as the game_date in the pitch, 0 otherwise
-            pitches["score_game_date"] = pitches["game_date"].apply(lambda x: 1 if x == game_date else 0)
-
-            # create a single similarity score: a weighted average of the individual similarity scores above
-            pitches["similarity_score"] = (
-                pitches["score_batter_name"] * 0.35 +
-                pitches["score_balls"] * 0.2 +
-                pitches["score_strikes"] * 0.2 +
-                pitches["score_score_bat"] * 0.1 +
-                pitches["score_score_fld"] * 0.1 +
-                pitches["score_game_date"] * 0.05
-            )
-
-            # sort pitches by similarity score and return the top N pitches
-            pitches = pitches.sort_values(by="similarity_score", ascending=False)
-            pitches = pitches.head(int(len(pitches) * self.sample_pctg))
-
-            self.logger.info(f"successfully fetched {pitches.shape[0]} similar pitches")
-            return pitches
+            
 
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")

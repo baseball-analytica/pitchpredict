@@ -4,6 +4,8 @@
 from abc import abstractmethod
 from typing import Any
 
+import pitchpredict.types.api as api_types
+
 
 class PitchPredictAlgorithm:
     """
@@ -21,14 +23,9 @@ class PitchPredictAlgorithm:
     @abstractmethod
     async def predict_pitcher(
         self,
-        pitcher_name: str,
-        batter_name: str,
-        balls: int,
-        strikes: int,
-        score_bat: int,
-        score_fld: int,
-        game_date: str,
-    ) -> dict[str, Any]:
+        request: api_types.PredictPitcherRequest,
+        **kwargs: Any,
+    ) -> api_types.PredictPitcherResponse:
         """
         Predict the pitcher's next pitch and its outcome.
         """
