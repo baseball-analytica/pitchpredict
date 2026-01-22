@@ -25,6 +25,50 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     ) -> None:
         super().__init__(name, **kwargs)
         self.logger = logging.getLogger("pitchpredict.backend.algs.similarity")
+        self._pitcher_cache: dict[int, tuple[pd.Timestamp, pd.DataFrame]] = {}
+
+    def _normalize_end_date(self, end_date: str | None) -> pd.Timestamp:
+        if end_date is None:
+            return pd.Timestamp.now().normalize()
+        try:
+            return pd.Timestamp(end_date).normalize()
+        except (ValueError, TypeError):
+            self.logger.warning("invalid end_date %s; using current date", end_date)
+            return pd.Timestamp.now().normalize()
+
+    def _ensure_game_date_dt(self, pitches: pd.DataFrame) -> pd.DataFrame:
+        if "game_date_dt" in pitches.columns or "game_date" not in pitches.columns:
+            return pitches
+        pitches = pitches.copy(deep=False)
+        pitches["game_date_dt"] = pd.to_datetime(pitches["game_date"], errors="coerce")
+        return pitches
+
+    def _filter_pitches_by_date(self, pitches: pd.DataFrame, end_date: pd.Timestamp) -> pd.DataFrame:
+        if "game_date_dt" not in pitches.columns:
+            return pitches.copy(deep=False)
+        mask = pitches["game_date_dt"] <= end_date
+        return pitches.loc[mask].copy(deep=False)
+
+    async def _get_cached_pitches_for_pitcher(
+        self,
+        pitcher_id: int,
+        end_date: str | None,
+    ) -> pd.DataFrame:
+        normalized_end_date = self._normalize_end_date(end_date)
+        cached = self._pitcher_cache.get(pitcher_id)
+        if cached is not None:
+            cached_end_date, cached_pitches = cached
+            if normalized_end_date <= cached_end_date:
+                return self._filter_pitches_by_date(cached_pitches, normalized_end_date)
+
+        pitches = await get_pitches_from_pitcher(
+            pitcher_id=pitcher_id,
+            start_date="2015-01-01",
+            end_date=normalized_end_date.strftime("%Y-%m-%d"),
+        )
+        pitches = self._ensure_game_date_dt(pitches)
+        self._pitcher_cache[pitcher_id] = (normalized_end_date, pitches)
+        return self._filter_pitches_by_date(pitches, normalized_end_date)
 
     async def predict_pitcher(
         self,
@@ -55,9 +99,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             effective_sample_size = request.sample_size if request.sample_size is not None else sample_size
             weights = similarity_types.SimilarityWeights().softmax()
 
-            pitches = await get_pitches_from_pitcher(
+            pitches = await self._get_cached_pitches_for_pitcher(
                 pitcher_id=pitcher_id,
-                start_date="2015-01-01",
                 end_date=request.game_date,
             )
             self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
@@ -282,12 +325,18 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 scores = (1 - (mismatches / 3)).clip(lower=0)
                 add_weighted_score("bases_state", scores)
 
-            if context.game_date is not None and "game_date" in pitches.columns:
-                target_date = datetime.strptime(context.game_date, "%Y-%m-%d")
-                dates = pd.to_datetime(pitches["game_date"], errors="coerce")
-                day_diff = (dates - target_date).dt.days.abs()
-                date_scores = (1 - (day_diff / 365.0)).clip(lower=0).fillna(0.0)
-                add_weighted_score("game_date", date_scores)
+            if context.game_date is not None:
+                target_date = pd.Timestamp(context.game_date)
+                if "game_date_dt" in pitches.columns:
+                    dates = pitches["game_date_dt"]
+                elif "game_date" in pitches.columns:
+                    dates = pd.to_datetime(pitches["game_date"], errors="coerce")
+                else:
+                    dates = None
+                if dates is not None:
+                    day_diff = (dates - target_date).dt.days.abs()
+                    date_scores = (1 - (day_diff / 365.0)).clip(lower=0).fillna(0.0)
+                    add_weighted_score("game_date", date_scores)
 
             pitches["similarity_score"] = similarity_score
 
@@ -327,26 +376,16 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
         try:
             # append "similarity score" column to pitches for each parameter
-            # 'score_pitcher_name': 1 if pitcher_name is the same as the pitcher in the pitch, 0 otherwise
-            pitches["score_pitcher_name"] = pitches["pitcher"].apply(lambda x: 1 if x == pitcher_id else 0)
-            # 'score_balls': 1 if balls is the same as the balls in the pitch, 0 otherwise
-            pitches["score_balls"] = pitches["balls"].apply(lambda x: 1 if x == balls else 0)
-            # 'score_strikes': 1 if strikes is the same as the strikes in the pitch, 0 otherwise
-            pitches["score_strikes"] = pitches["strikes"].apply(lambda x: 1 if x == strikes else 0)
-            # 'score_score_bat': 1 if score_bat is the same as the score_bat in the pitch, 0 otherwise
-            pitches["score_score_bat"] = pitches["bat_score"].apply(lambda x: 1 if x == score_bat else 0)
-            # 'score_score_fld': 1 if score_fld is the same as the score_fld in the pitch, 0 otherwise
-            pitches["score_score_fld"] = pitches["fld_score"].apply(lambda x: 1 if x == score_fld else 0)
-            # 'score_game_date': 1 if game_date is the same as the game_date in the pitch, 0 otherwise
-            pitches["score_game_date"] = pitches["game_date"].apply(lambda x: 1 if x == game_date else 0)
-            # 'score_pitch_type': 1 if pitch_type is the same as the pitch_type in the pitch, 0 otherwise
-            pitches["score_pitch_type"] = pitches["pitch_type"].apply(lambda x: 1 if x == pitch_type else 0)
-            # 'score_pitch_speed': 1 if pitch_speed is the same as the pitch_speed in the pitch, 0 otherwise
-            pitches["score_pitch_speed"] = pitches["release_speed"].apply(lambda x: 1 if x == pitch_speed else 0)
-            # 'score_pitch_x': 1 if pitch_x is the same as the pitch_x in the pitch, 0 otherwise
-            pitches["score_pitch_x"] = pitches["plate_x"].apply(lambda x: 1 if x == pitch_x else 0)
-            # 'score_pitch_z': 1 if pitch_z is the same as the pitch_z in the pitch, 0 otherwise
-            pitches["score_pitch_z"] = pitches["plate_z"].apply(lambda x: 1 if x == pitch_z else 0)
+            pitches["score_pitcher_name"] = pitches["pitcher"].eq(pitcher_id).astype(float)
+            pitches["score_balls"] = pitches["balls"].eq(balls).astype(float)
+            pitches["score_strikes"] = pitches["strikes"].eq(strikes).astype(float)
+            pitches["score_score_bat"] = pitches["bat_score"].eq(score_bat).astype(float)
+            pitches["score_score_fld"] = pitches["fld_score"].eq(score_fld).astype(float)
+            pitches["score_game_date"] = pitches["game_date"].eq(game_date).astype(float)
+            pitches["score_pitch_type"] = pitches["pitch_type"].eq(pitch_type).astype(float)
+            pitches["score_pitch_speed"] = pitches["release_speed"].eq(pitch_speed).astype(float)
+            pitches["score_pitch_x"] = pitches["plate_x"].eq(pitch_x).astype(float)
+            pitches["score_pitch_z"] = pitches["plate_z"].eq(pitch_z).astype(float)
 
             # create a single similarity score: a weighted average of the individual similarity scores above
             pitches["similarity_score"] = (
@@ -392,6 +431,16 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         self.logger.debug("digest_pitch_data called")
 
         try:
+            def quantiles(series: pd.Series) -> tuple[float, float, float, float, float]:
+                q = series.quantile([0.05, 0.25, 0.5, 0.75, 0.95])
+                return (
+                    q.loc[0.05],
+                    q.loc[0.25],
+                    q.loc[0.5],
+                    q.loc[0.75],
+                    q.loc[0.95],
+                )
+
             pitch_type_value_counts = pitches["pitch_type"].value_counts()
             pitch_type_probs = pitch_type_value_counts / pitch_type_value_counts.sum()
             pitch_speed_mean = pitches["release_speed"].mean()
@@ -420,65 +469,83 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             fastball_type_probs = fastball_type_value_counts / fastball_type_value_counts.sum()
             fastball_speed_mean = fastballs["release_speed"].mean()
             fastball_speed_std = fastballs["release_speed"].std()
-            fastball_speed_p05 = fastballs["release_speed"].quantile(0.05)
-            fastball_speed_p25 = fastballs["release_speed"].quantile(0.25)
-            fastball_speed_p50 = fastballs["release_speed"].quantile(0.50)
-            fastball_speed_p75 = fastballs["release_speed"].quantile(0.75)
-            fastball_speed_p95 = fastballs["release_speed"].quantile(0.95)
+            (
+                fastball_speed_p05,
+                fastball_speed_p25,
+                fastball_speed_p50,
+                fastball_speed_p75,
+                fastball_speed_p95,
+            ) = quantiles(fastballs["release_speed"])
             fastball_x_mean = fastballs["plate_x"].mean()
             fastball_x_std = fastballs["plate_x"].std()
-            fastball_x_p05 = fastballs["plate_x"].quantile(0.05)
-            fastball_x_p25 = fastballs["plate_x"].quantile(0.25)
-            fastball_x_p50 = fastballs["plate_x"].quantile(0.50)
-            fastball_x_p75 = fastballs["plate_x"].quantile(0.75)
-            fastball_x_p95 = fastballs["plate_x"].quantile(0.95)
+            (
+                fastball_x_p05,
+                fastball_x_p25,
+                fastball_x_p50,
+                fastball_x_p75,
+                fastball_x_p95,
+            ) = quantiles(fastballs["plate_x"])
             fastball_z_mean = fastballs["plate_z"].mean()
             fastball_z_std = fastballs["plate_z"].std()
-            fastball_z_p05 = fastballs["plate_z"].quantile(0.05)
-            fastball_z_p25 = fastballs["plate_z"].quantile(0.25)
-            fastball_z_p50 = fastballs["plate_z"].quantile(0.50)
-            fastball_z_p75 = fastballs["plate_z"].quantile(0.75)
-            fastball_z_p95 = fastballs["plate_z"].quantile(0.95)
+            (
+                fastball_z_p05,
+                fastball_z_p25,
+                fastball_z_p50,
+                fastball_z_p75,
+                fastball_z_p95,
+            ) = quantiles(fastballs["plate_z"])
 
             offspeed_type_value_counts = offspeed["pitch_type"].value_counts()
             offspeed_type_probs = offspeed_type_value_counts / offspeed_type_value_counts.sum()
             offspeed_speed_mean = offspeed["release_speed"].mean()
             offspeed_speed_std = offspeed["release_speed"].std()
-            offspeed_speed_p05 = offspeed["release_speed"].quantile(0.05)
-            offspeed_speed_p25 = offspeed["release_speed"].quantile(0.25)
-            offspeed_speed_p50 = offspeed["release_speed"].quantile(0.50)
-            offspeed_speed_p75 = offspeed["release_speed"].quantile(0.75)
-            offspeed_speed_p95 = offspeed["release_speed"].quantile(0.95)
+            (
+                offspeed_speed_p05,
+                offspeed_speed_p25,
+                offspeed_speed_p50,
+                offspeed_speed_p75,
+                offspeed_speed_p95,
+            ) = quantiles(offspeed["release_speed"])
             offspeed_x_mean = offspeed["plate_x"].mean()
             offspeed_x_std = offspeed["plate_x"].std()
-            offspeed_x_p05 = offspeed["plate_x"].quantile(0.05)
-            offspeed_x_p25 = offspeed["plate_x"].quantile(0.25)
-            offspeed_x_p50 = offspeed["plate_x"].quantile(0.50)
-            offspeed_x_p75 = offspeed["plate_x"].quantile(0.75)
-            offspeed_x_p95 = offspeed["plate_x"].quantile(0.95)
+            (
+                offspeed_x_p05,
+                offspeed_x_p25,
+                offspeed_x_p50,
+                offspeed_x_p75,
+                offspeed_x_p95,
+            ) = quantiles(offspeed["plate_x"])
             offspeed_z_mean = offspeed["plate_z"].mean()
             offspeed_z_std = offspeed["plate_z"].std()
-            offspeed_z_p05 = offspeed["plate_z"].quantile(0.05)
-            offspeed_z_p25 = offspeed["plate_z"].quantile(0.25)
-            offspeed_z_p50 = offspeed["plate_z"].quantile(0.50)
-            offspeed_z_p75 = offspeed["plate_z"].quantile(0.75)
-            offspeed_z_p95 = offspeed["plate_z"].quantile(0.95)
+            (
+                offspeed_z_p05,
+                offspeed_z_p25,
+                offspeed_z_p50,
+                offspeed_z_p75,
+                offspeed_z_p95,
+            ) = quantiles(offspeed["plate_z"])
 
-            pitch_speed_p05 = pitches["release_speed"].quantile(0.05)
-            pitch_speed_p25 = pitches["release_speed"].quantile(0.25)
-            pitch_speed_p50 = pitches["release_speed"].quantile(0.50)
-            pitch_speed_p75 = pitches["release_speed"].quantile(0.75)
-            pitch_speed_p95 = pitches["release_speed"].quantile(0.95)
-            pitch_x_p05 = pitches["plate_x"].quantile(0.05)
-            pitch_x_p25 = pitches["plate_x"].quantile(0.25)
-            pitch_x_p50 = pitches["plate_x"].quantile(0.50)
-            pitch_x_p75 = pitches["plate_x"].quantile(0.75)
-            pitch_x_p95 = pitches["plate_x"].quantile(0.95)
-            pitch_z_p05 = pitches["plate_z"].quantile(0.05)
-            pitch_z_p25 = pitches["plate_z"].quantile(0.25)
-            pitch_z_p50 = pitches["plate_z"].quantile(0.50)
-            pitch_z_p75 = pitches["plate_z"].quantile(0.75)
-            pitch_z_p95 = pitches["plate_z"].quantile(0.95)
+            (
+                pitch_speed_p05,
+                pitch_speed_p25,
+                pitch_speed_p50,
+                pitch_speed_p75,
+                pitch_speed_p95,
+            ) = quantiles(pitches["release_speed"])
+            (
+                pitch_x_p05,
+                pitch_x_p25,
+                pitch_x_p50,
+                pitch_x_p75,
+                pitch_x_p95,
+            ) = quantiles(pitches["plate_x"])
+            (
+                pitch_z_p05,
+                pitch_z_p25,
+                pitch_z_p50,
+                pitch_z_p75,
+                pitch_z_p95,
+            ) = quantiles(pitches["plate_z"])
 
             detailed = {
                 "pitch_prob_fastball": prob_fastballs,
@@ -906,14 +973,12 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
         try:
             # Continuous similarity score for exit velocity (15 mph tolerance)
-            batted_balls["score_launch_speed"] = batted_balls["launch_speed"].apply(
-                lambda x: max(0, 1 - abs(x - launch_speed) / 15.0)
-            )
+            speed_diff = (batted_balls["launch_speed"] - launch_speed).abs()
+            batted_balls["score_launch_speed"] = (1 - (speed_diff / 15.0)).clip(lower=0).fillna(0.0)
 
             # Continuous similarity score for launch angle (20 degree tolerance)
-            batted_balls["score_launch_angle"] = batted_balls["launch_angle"].apply(
-                lambda x: max(0, 1 - abs(x - launch_angle) / 20.0)
-            )
+            angle_diff = (batted_balls["launch_angle"] - launch_angle).abs()
+            batted_balls["score_launch_angle"] = (1 - (angle_diff / 20.0)).clip(lower=0).fillna(0.0)
 
             # Spray angle similarity (if provided)
             if spray_angle is not None and "hc_x" in batted_balls.columns and "hc_y" in batted_balls.columns:
@@ -921,63 +986,60 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 # hc_x: 0 = left field line, 125 = center, 250 = right field line
                 # Convert to spray angle: -45 (left) to +45 (right)
                 batted_balls["calc_spray_angle"] = ((batted_balls["hc_x"] - 125) / 125) * 45
-                batted_balls["score_spray_angle"] = batted_balls["calc_spray_angle"].apply(
-                    lambda x: max(0, 1 - abs(x - spray_angle) / 30.0) if pd.notna(x) else 0
-                )
+                spray_diff = (batted_balls["calc_spray_angle"] - spray_angle).abs()
+                spray_scores = (1 - (spray_diff / 30.0)).clip(lower=0)
+                batted_balls["score_spray_angle"] = spray_scores.where(
+                    batted_balls["calc_spray_angle"].notna(), 0.0
+                ).fillna(0.0)
             else:
                 batted_balls["score_spray_angle"] = 0.0
 
             # Batted ball type similarity (if provided)
             if bb_type is not None and "bb_type" in batted_balls.columns:
-                batted_balls["score_bb_type"] = batted_balls["bb_type"].apply(
-                    lambda x: 1.0 if x == bb_type else 0.0
-                )
+                batted_balls["score_bb_type"] = batted_balls["bb_type"].eq(bb_type).astype(float)
             else:
                 batted_balls["score_bb_type"] = 0.0
 
             # Outs similarity (if provided)
             if outs is not None and "outs_when_up" in batted_balls.columns:
-                batted_balls["score_outs"] = batted_balls["outs_when_up"].apply(
-                    lambda x: 1.0 if x == outs else 0.0
-                )
+                batted_balls["score_outs"] = batted_balls["outs_when_up"].eq(outs).astype(float)
             else:
                 batted_balls["score_outs"] = 0.0
 
             # Bases state similarity (if provided)
-            if bases_state is not None and "on_1b" in batted_balls.columns:
-                # Calculate bases state from on_1b, on_2b, on_3b columns
-                def calc_bases_state(row):
-                    state = 0
-                    if pd.notna(row.get("on_1b")):
-                        state |= 1
-                    if pd.notna(row.get("on_2b")):
-                        state |= 2
-                    if pd.notna(row.get("on_3b")):
-                        state |= 4
-                    return state
-
-                batted_balls["calc_bases_state"] = batted_balls.apply(calc_bases_state, axis=1)
-                batted_balls["score_bases_state"] = batted_balls["calc_bases_state"].apply(
-                    lambda x: 1.0 if x == bases_state else 0.5 if (x > 0 and bases_state > 0) else 0.0
+            if bases_state is not None and {"on_1b", "on_2b", "on_3b"}.issubset(batted_balls.columns):
+                runner_on_1b = batted_balls["on_1b"].notna()
+                runner_on_2b = batted_balls["on_2b"].notna()
+                runner_on_3b = batted_balls["on_3b"].notna()
+                target_on_1b = bool(bases_state & 1)
+                target_on_2b = bool(bases_state & 2)
+                target_on_3b = bool(bases_state & 4)
+                mismatches = (
+                    (runner_on_1b != target_on_1b).astype(int)
+                    + (runner_on_2b != target_on_2b).astype(int)
+                    + (runner_on_3b != target_on_3b).astype(int)
                 )
+                batted_balls["calc_bases_state"] = (
+                    runner_on_1b.astype(int)
+                    + (runner_on_2b.astype(int) * 2)
+                    + (runner_on_3b.astype(int) * 4)
+                )
+                batted_balls["score_bases_state"] = (1 - (mismatches / 3)).clip(lower=0)
             else:
                 batted_balls["score_bases_state"] = 0.0
 
             # Batter similarity (if provided)
             if batter_id is not None and "batter" in batted_balls.columns:
-                batted_balls["score_batter"] = batted_balls["batter"].apply(
-                    lambda x: 1.0 if x == batter_id else 0.0
-                )
+                batted_balls["score_batter"] = batted_balls["batter"].eq(batter_id).astype(float)
             else:
                 batted_balls["score_batter"] = 0.0
 
             # Date similarity (if provided) - more recent dates get higher scores
             if game_date is not None and "game_date" in batted_balls.columns:
-                target_date = datetime.strptime(game_date, "%Y-%m-%d")
-                batted_balls["score_date"] = batted_balls["game_date"].apply(
-                    lambda x: max(0, 1 - abs((datetime.strptime(str(x)[:10], "%Y-%m-%d") - target_date).days) / 365.0)
-                    if pd.notna(x) else 0
-                )
+                target_date = pd.Timestamp(game_date)
+                dates = pd.to_datetime(batted_balls["game_date"], errors="coerce")
+                day_diff = (dates - target_date).dt.days.abs()
+                batted_balls["score_date"] = (1 - (day_diff / 365.0)).clip(lower=0).fillna(0.0)
             else:
                 batted_balls["score_date"] = 0.0
 

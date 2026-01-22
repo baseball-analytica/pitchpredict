@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
+import pitchpredict.backend.algs.similarity.base as similarity_base
 import pitchpredict.types.api as api_types
 
 
@@ -101,3 +102,44 @@ def test_sample_pitches_uses_description_when_events_missing() -> None:
 
     assert len(sampled) == 1
     assert sampled[0].result == "called_strike"
+
+
+@pytest.mark.asyncio
+async def test_get_cached_pitches_for_pitcher_reuses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    async def fake_get_pitches_from_pitcher(
+        pitcher_id: int,
+        start_date: str,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        calls.append(
+            {
+                "pitcher_id": pitcher_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+        )
+        return pd.DataFrame(
+            [
+                {"pitcher": pitcher_id, "game_date": "2024-06-01"},
+                {"pitcher": pitcher_id, "game_date": "2024-06-10"},
+            ]
+        )
+
+    monkeypatch.setattr(similarity_base, "get_pitches_from_pitcher", fake_get_pitches_from_pitcher)
+
+    algorithm = SimilarityAlgorithm()
+    first = await algorithm._get_cached_pitches_for_pitcher(
+        pitcher_id=42,
+        end_date="2024-06-10",
+    )
+    second = await algorithm._get_cached_pitches_for_pitcher(
+        pitcher_id=42,
+        end_date="2024-06-05",
+    )
+
+    assert len(calls) == 1
+    assert len(first) == 2
+    assert len(second) == 1
+    assert second.iloc[0]["game_date"] == "2024-06-01"
