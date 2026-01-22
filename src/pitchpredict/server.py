@@ -9,7 +9,7 @@ import uvicorn
 
 from pitchpredict.api import PitchPredict
 import pitchpredict.utils as utils
-import pitchpredict.types.server as server_types
+import pitchpredict.types.api as api_types
 
 
 @asynccontextmanager
@@ -54,29 +54,16 @@ def read_root():
 
 
 @app.post("/predict/pitcher")
-async def predict_pitcher_endpoint(request: server_types.PredictPitcherRequest) -> server_types.PredictPitcherResponse:
+async def predict_pitcher_endpoint(request: api_types.PredictPitcherRequest) -> api_types.PredictPitcherResponse:
     """
     Predict the pitcher's next pitch and outcome.
     """
     try:
         api = app.state.api
         result = await api.predict_pitcher(
-            pitcher_name=request.pitcher_name,
-            batter_name=request.batter_name,
-            balls=request.balls,
-            strikes=request.strikes,
-            score_bat=request.score_bat,
-            score_fld=request.score_fld,
-            game_date=request.game_date,
-            algorithm=request.algorithm,
+            request=request,
         )
-        return server_types.PredictPitcherResponse(
-            basic_pitch_data=result["basic_pitch_data"],
-            detailed_pitch_data=result["detailed_pitch_data"],
-            basic_outcome_data=result["basic_outcome_data"],
-            detailed_outcome_data=result["detailed_outcome_data"],
-            prediction_metadata=result["prediction_metadata"],
-        )
+        return result
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -84,7 +71,7 @@ async def predict_pitcher_endpoint(request: server_types.PredictPitcherRequest) 
 
 
 @app.post("/predict/batter")
-async def predict_batter_endpoint(request: server_types.PredictBatterRequest) -> server_types.PredictBatterResponse:
+async def predict_batter_endpoint(request: api_types.PredictBatterRequest) -> api_types.PredictBatterResponse:
     """
     Predict the batter's next outcome.
     """
@@ -104,7 +91,7 @@ async def predict_batter_endpoint(request: server_types.PredictBatterRequest) ->
             pitch_z=request.pitch_z,
             algorithm=request.algorithm,
         )
-        return server_types.PredictBatterResponse(
+        return api_types.PredictBatterResponse(
             basic_outcome_data=result["basic_outcome_data"],
             detailed_outcome_data=result["detailed_outcome_data"],
             prediction_metadata=result["prediction_metadata"],
@@ -116,7 +103,7 @@ async def predict_batter_endpoint(request: server_types.PredictBatterRequest) ->
 
 
 @app.post("/predict/batted-ball")
-async def predict_batted_ball_endpoint(request: server_types.PredictBattedBallRequest) -> server_types.PredictBattedBallResponse:
+async def predict_batted_ball_endpoint(request: api_types.PredictBattedBallRequest) -> api_types.PredictBattedBallResponse:
     """
     Predict batted ball outcome probabilities given exit velocity, launch angle, and optional game context.
     """
@@ -133,7 +120,7 @@ async def predict_batted_ball_endpoint(request: server_types.PredictBattedBallRe
             batter_id=request.batter_id,
             game_date=request.game_date,
         )
-        return server_types.PredictBattedBallResponse(
+        return api_types.PredictBattedBallResponse(
             basic_outcome_data=result["basic_outcome_data"],
             detailed_outcome_data=result["detailed_outcome_data"],
             prediction_metadata=result["prediction_metadata"],
