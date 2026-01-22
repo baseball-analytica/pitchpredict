@@ -61,22 +61,9 @@ async def predict_pitcher_endpoint(request: api_types.PredictPitcherRequest) -> 
     try:
         api = app.state.api
         result = await api.predict_pitcher(
-            pitcher_name=request.pitcher_name,
-            batter_name=request.batter_name,
-            balls=request.balls,
-            strikes=request.strikes,
-            score_bat=request.score_bat,
-            score_fld=request.score_fld,
-            game_date=request.game_date,
-            algorithm=request.algorithm,
+            request=request,
         )
-        return api_types.PredictPitcherResponse(
-            basic_pitch_data=result["basic_pitch_data"],
-            detailed_pitch_data=result["detailed_pitch_data"],
-            basic_outcome_data=result["basic_outcome_data"],
-            detailed_outcome_data=result["detailed_outcome_data"],
-            prediction_metadata=result["prediction_metadata"],
-        )
+        return result
     except HTTPException as e:
         raise e
     except Exception as e:

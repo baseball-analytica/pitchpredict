@@ -29,6 +29,8 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     async def predict_pitcher(
         self,
         request: api_types.PredictPitcherRequest,
+        sample_pctg: float = 0.05,
+        sample_size: int = 1,
         **kwargs: Any,
     ) -> api_types.PredictPitcherResponse:
         """
@@ -41,8 +43,16 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             self.logger.debug(f"start time: {start_time}")
 
             pitcher_id = request.pitcher_id
-            batter_id = request.batter_id
 
+            request_values = request.model_dump()
+            request_sample_pctg = request_values.get("sample_pctg")
+            if request_sample_pctg is not None:
+                try:
+                    sample_pctg = float(request_sample_pctg)
+                except (TypeError, ValueError):
+                    self.logger.warning("invalid sample_pctg in request; using default")
+
+            effective_sample_size = request.sample_size if request.sample_size is not None else sample_size
             weights = similarity_types.SimilarityWeights().softmax()
 
             pitches = await get_pitches_from_pitcher(
@@ -56,6 +66,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 pitches=pitches,
                 context=request,
                 weights=weights,
+                sample_pctg=sample_pctg,
             )
             self.logger.debug(f"successfully fetched {similar_pitches.shape[0]} similar pitches")
 
@@ -67,11 +78,15 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             )
             self.logger.debug("successfully digested outcome data")
 
+            sampled_pitches = self._sample_pitches(pitches=similar_pitches, n=effective_sample_size)
+            self.logger.debug(f"successfully sampled {len(sampled_pitches)} pitches")
+
             prediction_metadata = self.get_pitcher_prediction_metadata(
                 start_time=start_time,
                 end_time=datetime.now(),
                 n_pitches_total=len(pitches),
                 n_pitches_sampled=len(similar_pitches),
+                sample_pctg=sample_pctg,
             )
 
             self.logger.info("predict_pitcher completed successfully")
@@ -81,7 +96,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 detailed_pitch_data=detailed_pitch_data,
                 basic_outcome_data=basic_outcome_data,
                 detailed_outcome_data=detailed_outcome_data,
-                pitches=similar_pitches,
+                pitches=sampled_pitches,
                 prediction_metadata=prediction_metadata,
             )
 
@@ -125,6 +140,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             )
             self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
 
+            sample_pctg = 0.05
             similar_pitches = await self._get_similar_pitches_for_batter(
                 pitches=pitches,
                 pitcher_id=pitcher_id,
@@ -137,6 +153,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 pitch_speed=pitch_speed,
                 pitch_x=pitch_x,
                 pitch_z=pitch_z,
+                sample_pctg=sample_pctg,
             )
             self.logger.debug(f"successfully fetched {similar_pitches.shape[0]} similar pitches")
 
@@ -150,6 +167,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 end_time=datetime.now(),
                 n_pitches_total=len(pitches),
                 n_pitches_sampled=len(similar_pitches),
+                sample_pctg=sample_pctg,
             )
 
             self.logger.info("predict_batter completed successfully")
@@ -172,6 +190,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         pitches: pd.DataFrame,
         context: api_types.PredictPitcherRequest,
         weights: dict[str, float],
+        sample_pctg: float = 0.05,
     ) -> pd.DataFrame:
         """
         Get the pitches most similar to the given context for this pitcher.
@@ -179,7 +198,105 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         self.logger.debug("get_similar_pitches_for_pitcher called")
 
         try:
-            
+            context_values = context.model_dump()
+            similarity_score = pd.Series(0.0, index=pitches.index)
+
+            def add_weighted_score(field: str, scores: pd.Series) -> None:
+                weight = weights.get(field, 0.0)
+                if weight <= 0.0:
+                    return
+                nonlocal similarity_score
+                similarity_score = similarity_score.add(scores * weight, fill_value=0.0)
+                pitches[f"score_{field}"] = scores
+
+            def score_equal(series: pd.Series, target: Any) -> pd.Series:
+                return series.eq(target).astype(float).fillna(0.0)
+
+            def score_numeric(series: pd.Series, target: float, max_diff: float | None = None) -> pd.Series:
+                values = pd.to_numeric(series, errors="coerce")
+                if max_diff is None or max_diff <= 0 or pd.isna(max_diff):
+                    return values.eq(target).astype(float).fillna(0.0)
+                diff = (values - target).abs()
+                score = 1 - (diff / max_diff)
+                return score.clip(lower=0).fillna(0.0)
+
+            eq_fields = {
+                "batter_id": "batter",
+                "pitcher_throws": "p_throws",
+                "batter_hits": "stand",
+                "count_balls": "balls",
+                "count_strikes": "strikes",
+                "outs": "outs_when_up",
+                "inning": "inning",
+                "number_through_order": "n_thruorder_pitcher",
+                "fielder_2_id": "fielder_2",
+                "fielder_3_id": "fielder_3",
+                "fielder_4_id": "fielder_4",
+                "fielder_5_id": "fielder_5",
+                "fielder_6_id": "fielder_6",
+                "fielder_7_id": "fielder_7",
+                "fielder_8_id": "fielder_8",
+                "fielder_9_id": "fielder_9",
+            }
+
+            numeric_fields: dict[str, tuple[str, float | None]] = {
+                "pitcher_age": ("age_pit", None),
+                "batter_age": ("age_bat", None),
+                "score_bat": ("bat_score", None),
+                "score_fld": ("fld_score", None),
+                "pitch_number": ("pitch_number", None),
+                "batter_days_since_prev_game": ("batter_days_since_prev_game", None),
+                "pitcher_days_since_prev_game": ("pitcher_days_since_prev_game", None),
+                "strike_zone_top": ("sz_top", 0.2),
+                "strike_zone_bottom": ("sz_bot", 0.1),
+            }
+
+            for field, column in eq_fields.items():
+                value = context_values.get(field)
+                if value is None or column not in pitches.columns:
+                    continue
+                add_weighted_score(field, score_equal(pitches[column], value))
+
+            for field, (column, max_diff) in numeric_fields.items():
+                value = context_values.get(field)
+                if value is None or column not in pitches.columns:
+                    continue
+                tolerance = max_diff
+                if tolerance is None:
+                    tolerance = pd.to_numeric(pitches[column], errors="coerce").std()
+                add_weighted_score(field, score_numeric(pitches[column], float(value), tolerance))
+
+            bases_state = context_values.get("bases_state")
+            if bases_state is not None and {"on_1b", "on_2b", "on_3b"}.issubset(pitches.columns):
+                runner_on_1b = pitches["on_1b"].notna()
+                runner_on_2b = pitches["on_2b"].notna()
+                runner_on_3b = pitches["on_3b"].notna()
+                target_on_1b = bool(bases_state & 1)
+                target_on_2b = bool(bases_state & 2)
+                target_on_3b = bool(bases_state & 4)
+                mismatches = (
+                    (runner_on_1b != target_on_1b).astype(int)
+                    + (runner_on_2b != target_on_2b).astype(int)
+                    + (runner_on_3b != target_on_3b).astype(int)
+                )
+                scores = (1 - (mismatches / 3)).clip(lower=0)
+                add_weighted_score("bases_state", scores)
+
+            if context.game_date is not None and "game_date" in pitches.columns:
+                target_date = datetime.strptime(context.game_date, "%Y-%m-%d")
+                dates = pd.to_datetime(pitches["game_date"], errors="coerce")
+                day_diff = (dates - target_date).dt.days.abs()
+                date_scores = (1 - (day_diff / 365.0)).clip(lower=0).fillna(0.0)
+                add_weighted_score("game_date", date_scores)
+
+            pitches["similarity_score"] = similarity_score
+
+            pitches = pitches.sort_values(by="similarity_score", ascending=False)
+            n_samples = max(100, int(len(pitches) * sample_pctg))
+            pitches = pitches.head(n_samples)
+
+            self.logger.info(f"successfully fetched {pitches.shape[0]} similar pitches")
+            return pitches
 
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")
@@ -201,6 +318,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         pitch_speed: float,
         pitch_x: float,
         pitch_z: float,
+        sample_pctg: float = 0.05,
     ) -> pd.DataFrame:
         """
         Get the pitches most similar to the given context for this batter.
@@ -246,7 +364,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # sort pitches by similarity score and return the top N pitches
             pitches = pitches.sort_values(by="similarity_score", ascending=False)
-            pitches = pitches.head(int(len(pitches) * self.sample_pctg))
+            pitches = pitches.head(int(len(pitches) * sample_pctg))
 
             self.logger.info(f"successfully fetched {pitches.shape[0]} similar pitches")
             return pitches
@@ -589,7 +707,6 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         return {
             "algorithm_name": "similarity",
             "instance_name": self.name,
-            "sample_pctg": self.sample_pctg,
         }
 
     def get_pitcher_prediction_metadata(
@@ -622,6 +739,11 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 raise ValueError("n_pitches_sampled is required")
             if not isinstance(n_pitches_sampled, int):
                 raise ValueError("n_pitches_sampled must be an integer")
+            sample_pctg = kwargs.get("sample_pctg")
+            if sample_pctg is None:
+                raise ValueError("sample_pctg is required")
+            if not isinstance(sample_pctg, float):
+                raise ValueError("sample_pctg must be a float")
 
             self.logger.info("get_pitcher_prediction_metadata completed successfully")
             return {
@@ -630,7 +752,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "duration": (end_time - start_time).total_seconds(),
                 "n_pitches_total": n_pitches_total,
                 "n_pitches_sampled": n_pitches_sampled,
-                "sample_pctg": self.sample_pctg,
+                "sample_pctg": sample_pctg,
             }
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")
@@ -669,6 +791,11 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 raise ValueError("n_pitches_sampled is required")
             if not isinstance(n_pitches_sampled, int):
                 raise ValueError("n_pitches_sampled must be an integer")
+            sample_pctg = kwargs.get("sample_pctg")
+            if sample_pctg is None:
+                raise ValueError("sample_pctg is required")
+            if not isinstance(sample_pctg, float):
+                raise ValueError("sample_pctg must be a float")
 
             self.logger.info("get_batter_prediction_metadata completed successfully")
             return {
@@ -677,7 +804,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "duration": (end_time - start_time).total_seconds(),
                 "n_pitches_total": n_pitches_total,
                 "n_pitches_sampled": n_pitches_sampled,
-                "sample_pctg": self.sample_pctg,
+                "sample_pctg": sample_pctg,
             }
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")
@@ -710,6 +837,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             batted_balls = await get_all_batted_balls()
             self.logger.debug(f"successfully fetched {batted_balls.shape[0]} batted balls")
 
+            sample_pctg = 0.05
             # Get similar batted balls using continuous similarity scoring
             similar_batted_balls = await self._get_similar_batted_balls(
                 batted_balls=batted_balls,
@@ -721,6 +849,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 bases_state=bases_state,
                 batter_id=batter_id,
                 game_date=game_date,
+                sample_pctg=sample_pctg,
             )
             self.logger.debug(f"successfully found {similar_batted_balls.shape[0]} similar batted balls")
 
@@ -738,6 +867,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 end_time=datetime.now(),
                 n_batted_balls_total=len(batted_balls),
                 n_batted_balls_sampled=len(similar_batted_balls),
+                sample_pctg=sample_pctg,
             )
 
             self.logger.info("predict_batted_ball completed successfully")
@@ -767,6 +897,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         bases_state: int | None = None,
         batter_id: int | None = None,
         game_date: str | None = None,
+        sample_pctg: float = 0.05,
     ) -> pd.DataFrame:
         """
         Get batted balls most similar to the given parameters using continuous similarity scoring.
@@ -863,7 +994,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # Sort by similarity and take top N%
             batted_balls = batted_balls.sort_values(by="similarity_score", ascending=False)
-            n_samples = max(100, int(len(batted_balls) * self.sample_pctg))
+            n_samples = max(100, int(len(batted_balls) * sample_pctg))
             similar = batted_balls.head(n_samples)
 
             self.logger.info(f"successfully found {similar.shape[0]} similar batted balls")
@@ -1029,6 +1160,11 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 raise ValueError("n_batted_balls_sampled is required")
             if not isinstance(n_batted_balls_sampled, int):
                 raise ValueError("n_batted_balls_sampled must be an integer")
+            sample_pctg = kwargs.get("sample_pctg")
+            if sample_pctg is None:
+                raise ValueError("sample_pctg is required")
+            if not isinstance(sample_pctg, float):
+                raise ValueError("sample_pctg must be a float")
 
             similarity_weights = {
                 "launch_speed": 0.45,
@@ -1042,9 +1178,107 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             self.logger.info("get_batted_ball_prediction_metadata completed successfully")
             return {
                 "n_batted_balls_sampled": n_batted_balls_sampled,
-                "sample_pctg": self.sample_pctg,
+                "sample_pctg": sample_pctg,
                 "similarity_weights": similarity_weights,
             }
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def _sample_pitches(
+        self,
+        pitches: pd.DataFrame,
+        n: int = 1,
+    ) -> list[api_types.Pitch]:
+        """
+        Sample n pitches from the given dataframe of similar pitches.
+        """
+        self.logger.debug("_sample_pitches called")
+
+        try:
+            if n > len(pitches):
+                raise HTTPException(status_code=400, detail="n is greater than the number of pitches")
+
+            sampled_pitches = pitches.sample(n)
+            sampled_pitches_list: list[api_types.Pitch] = []
+
+            def coerce_float(value: Any) -> float | None:
+                if value is None or pd.isna(value):
+                    return None
+                return float(value)
+
+            for pitch in sampled_pitches.itertuples():
+                pitch_type = getattr(pitch, "pitch_type", None)
+                if pitch_type is None or pd.isna(pitch_type):
+                    continue
+
+                speed = coerce_float(getattr(pitch, "release_speed", None))
+                spin_rate = coerce_float(getattr(pitch, "release_spin_rate", None))
+                spin_axis = coerce_float(getattr(pitch, "spin_axis", None))
+                release_pos_x = coerce_float(getattr(pitch, "release_pos_x", None))
+                release_pos_z = coerce_float(getattr(pitch, "release_pos_z", None))
+                release_extension = coerce_float(getattr(pitch, "release_extension", None))
+                vx0 = coerce_float(getattr(pitch, "vx0", None))
+                vy0 = coerce_float(getattr(pitch, "vy0", None))
+                vz0 = coerce_float(getattr(pitch, "vz0", None))
+                ax = coerce_float(getattr(pitch, "ax", None))
+                ay = coerce_float(getattr(pitch, "ay", None))
+                az = coerce_float(getattr(pitch, "az", None))
+                plate_pos_x = coerce_float(getattr(pitch, "plate_x", None))
+                plate_pos_z = coerce_float(getattr(pitch, "plate_z", None))
+
+                numeric_fields = [
+                    speed,
+                    spin_rate,
+                    spin_axis,
+                    release_pos_x,
+                    release_pos_z,
+                    release_extension,
+                    vx0,
+                    vy0,
+                    vz0,
+                    ax,
+                    ay,
+                    az,
+                    plate_pos_x,
+                    plate_pos_z,
+                ]
+                if any(value is None for value in numeric_fields):
+                    continue
+
+                result_value = getattr(pitch, "events", None)
+                if result_value is None or pd.isna(result_value):
+                    result_value = getattr(pitch, "description", None)
+                result = "unknown" if result_value is None or pd.isna(result_value) else str(result_value)
+
+                sampled_pitch = api_types.Pitch(
+                    pitch_type=str(pitch_type),
+                    speed=speed,
+                    spin_rate=spin_rate,
+                    spin_axis=spin_axis,
+                    release_pos_x=release_pos_x,
+                    release_pos_z=release_pos_z,
+                    release_extension=release_extension,
+                    vx0=vx0,
+                    vy0=vy0,
+                    vz0=vz0,
+                    ax=ax,
+                    ay=ay,
+                    az=az,
+                    plate_pos_x=plate_pos_x,
+                    plate_pos_z=plate_pos_z,
+                    result=result,
+                )
+                sampled_pitches_list.append(sampled_pitch)
+
+            if len(sampled_pitches_list) < n:
+                self.logger.warning("sampled pitches contain missing fields; returning fewer samples")
+
+            return sampled_pitches_list
+
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")
             raise e
