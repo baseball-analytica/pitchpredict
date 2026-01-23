@@ -2,7 +2,7 @@
 
 PitchPredict is cutting-edge MLB pitch prediction software that predicts pitcher and batter behavior using Statcast data. Open-source and free to use.
 
-**Version:** 0.3.0
+**Version:** 0.4.0
 **License:** MIT
 **Author:** Addison Kline (akline@baseball-analytica.com)
 
@@ -38,21 +38,22 @@ uv pip install pitchpredict
 
 ```python
 import asyncio
+from pybaseball import playerid_lookup
 from pitchpredict import PitchPredict
 
 async def main():
     client = PitchPredict()
     result = await client.predict_pitcher(
-        pitcher_name="Clayton Kershaw",
-        batter_name="Aaron Judge",
-        balls=0,
-        strikes=0,
+        pitcher_id=int(playerid_lookup("Kershaw", "Clayton").iloc[0]["key_mlbam"]),
+        batter_id=int(playerid_lookup("Judge", "Aaron").iloc[0]["key_mlbam"]),
+        count_balls=0,
+        count_strikes=0,
         score_bat=0,
         score_fld=0,
         game_date="2024-06-15",
         algorithm="similarity"
     )
-    print(result["basic_pitch_data"])
+    print(result.basic_pitch_data)
 
 asyncio.run(main())
 ```

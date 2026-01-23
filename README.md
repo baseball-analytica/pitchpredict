@@ -47,28 +47,36 @@ uv sync
 
 ```python
 import asyncio
+from pybaseball import playerid_lookup
 from pitchpredict import PitchPredict
 
 async def main():
     client = PitchPredict()
 
+    # Resolve MLBAM IDs (via pybaseball) for pitcher/batter
+    pitcher_id = int(playerid_lookup("Kershaw", "Clayton").iloc[0]["key_mlbam"])
+    batter_id = int(playerid_lookup("Judge", "Aaron").iloc[0]["key_mlbam"])
+
     # Predict pitcher's next pitch
     result = await client.predict_pitcher(
-        pitcher_name="Clayton Kershaw",
-        batter_name="Aaron Judge",
-        balls=0,
-        strikes=0,
+        pitcher_id=pitcher_id,
+        batter_id=batter_id,
+        count_balls=0,
+        count_strikes=0,
         score_bat=0,
         score_fld=0,
         game_date="2024-06-15",
         algorithm="similarity"
     )
 
-    print(result["basic_pitch_data"]["pitch_type_probs"])
+    print(result.basic_pitch_data["pitch_type_probs"])
     # {'FF': 0.45, 'SL': 0.30, 'CU': 0.15, 'CH': 0.10}
 
 asyncio.run(main())
 ```
+
+Pitcher and batter IDs are MLBAM IDs; use `pybaseball.playerid_lookup` as shown above to resolve names.
+Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
 Caching is enabled by default and stores data in `.pitchpredict_cache`. Delete the folder to refresh cached data.
 
@@ -86,16 +94,18 @@ Make a prediction:
 curl -X POST http://localhost:8056/predict/pitcher \
   -H "Content-Type: application/json" \
   -d '{
-    "pitcher_name": "Clayton Kershaw",
-    "batter_name": "Aaron Judge",
-    "balls": 0,
-    "strikes": 0,
+    "pitcher_id": 477132,
+    "batter_id": 592450,
+    "count_balls": 0,
+    "count_strikes": 0,
     "score_bat": 0,
     "score_fld": 0,
     "game_date": "2024-06-15",
     "algorithm": "similarity"
   }'
 ```
+
+`pitcher_id` and `batter_id` are MLBAM IDs; use `pybaseball.playerid_lookup` to resolve names.
 
 Predict batted ball outcomes:
 

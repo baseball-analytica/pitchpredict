@@ -20,6 +20,7 @@ For development installation, see the [Installation Guide](installation.md).
 
 ```python
 import asyncio
+from pybaseball import playerid_lookup
 from pitchpredict import PitchPredict
 
 async def main():
@@ -28,10 +29,10 @@ async def main():
 
     # Predict a pitcher's next pitch
     result = await client.predict_pitcher(
-        pitcher_name="Clayton Kershaw",
-        batter_name="Aaron Judge",
-        balls=0,
-        strikes=0,
+        pitcher_id=int(playerid_lookup("Kershaw", "Clayton").iloc[0]["key_mlbam"]),
+        batter_id=int(playerid_lookup("Judge", "Aaron").iloc[0]["key_mlbam"]),
+        count_balls=0,
+        count_strikes=0,
         score_bat=0,
         score_fld=0,
         game_date="2024-06-15",
@@ -40,14 +41,17 @@ async def main():
 
     # View pitch type probabilities
     print("Pitch type probabilities:")
-    print(result["basic_pitch_data"]["pitch_type_probs"])
+    print(result.basic_pitch_data["pitch_type_probs"])
 
     # View outcome probabilities
     print("\nOutcome probabilities:")
-    print(result["basic_outcome_data"]["outcome_probs"])
+    print(result.basic_outcome_data["outcome_probs"])
 
 asyncio.run(main())
 ```
+
+Pitcher and batter IDs are MLBAM IDs; use `pybaseball.playerid_lookup` as shown above to resolve names.
+Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
 ## Quick Start: REST API Server
 
@@ -65,10 +69,10 @@ Make a prediction request:
 curl -X POST http://localhost:8056/predict/pitcher \
   -H "Content-Type: application/json" \
   -d '{
-    "pitcher_name": "Clayton Kershaw",
-    "batter_name": "Aaron Judge",
-    "balls": 0,
-    "strikes": 0,
+    "pitcher_id": 477132,
+    "batter_id": 592450,
+    "count_balls": 0,
+    "count_strikes": 0,
     "score_bat": 0,
     "score_fld": 0,
     "game_date": "2024-06-15",
