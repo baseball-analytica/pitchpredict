@@ -446,7 +446,7 @@ class PitchPredictCache:
             value = record.get(key)
             if value is not None:
                 try:
-                    return int(value)
+                    return int(value) # type: ignore
                 except (TypeError, ValueError):
                     return None
         return None

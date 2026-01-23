@@ -218,3 +218,18 @@ async def test_get_player_record_from_id_uses_cache(monkeypatch: pytest.MonkeyPa
     )
 
     assert result == record
+
+
+def test_parse_player_name_handles_suffix() -> None:
+    last_name, first_name = fetching._parse_player_name("Bobby Witt Jr.")
+    assert (last_name, first_name) == ("Witt Jr.", "Bobby")
+
+
+def test_parse_player_name_handles_compound_last_name() -> None:
+    last_name, first_name = fetching._parse_player_name("Elly De La Cruz")
+    assert (last_name, first_name) == ("De La Cruz", "Elly")
+
+
+def test_parse_player_name_handles_comma_format() -> None:
+    last_name, first_name = fetching._parse_player_name("Witt Jr., Bobby")
+    assert (last_name, first_name) == ("Witt Jr.", "Bobby")

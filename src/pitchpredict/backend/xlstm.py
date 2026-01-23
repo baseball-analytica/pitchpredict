@@ -75,7 +75,7 @@ def log_if_main(s: str) -> None:
 def setup_wandb(cfg: "Config") -> None:
     if is_main_process():
         wandb.init(project="baseball-xlstm", config=(asdict(cfg)), id=cfg.run_id, resume=("never" if cfg.run_id is None else "allow"))
-        cfg.run_id = wandb.run.id
+        cfg.run_id = wandb.run.id # type: ignore
 
 
 @dataclass

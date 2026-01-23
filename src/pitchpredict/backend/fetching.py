@@ -40,7 +40,7 @@ def _coerce_record_value(value: object) -> object:
 def _records_from_player_df(player_ids: pd.DataFrame) -> list[dict[str, object]]:
     records = player_ids.where(pd.notna(player_ids), None).to_dict(orient="records")
     return [
-        {key: _coerce_record_value(value) for key, value in record.items()}
+        {str(key): _coerce_record_value(value) for key, value in record.items()}
         for record in records
     ]
 
@@ -326,16 +326,32 @@ async def get_player_record_from_id(
 def _parse_player_name(name: str) -> tuple[str, str]:
     """
     Parse the given player's name: "First Last" -> ("Last", "First").
+    Supports compound last names and suffixes (e.g., "Bobby Witt Jr.").
     """
     logger.debug("parse_player_name called")
 
-    name_split = name.split(" ")
-    if len(name_split) != 2:
-        logger.error(f"player name must be in the format 'First Last': {name}")
-        raise HTTPException(status_code=400, detail="player name must be in the format 'First Last'")
+    cleaned = " ".join(name.strip().split())
+    if not cleaned:
+        logger.error("player name is empty")
+        raise HTTPException(status_code=400, detail="player name must include first and last name")
 
-    logger.debug(f"parsed player name: {name_split[1]}, {name_split[0]}")
-    return name_split[1], name_split[0]
+    if "," in cleaned:
+        last_name, first_name = [part.strip() for part in cleaned.split(",", 1)]
+        if not last_name or not first_name:
+            logger.error(f"player name must include first and last name: {name}")
+            raise HTTPException(status_code=400, detail="player name must include first and last name")
+        logger.debug(f"parsed player name: {last_name}, {first_name}")
+        return last_name, first_name
+
+    name_split = cleaned.split(" ")
+    if len(name_split) < 2:
+        logger.error(f"player name must include first and last name: {name}")
+        raise HTTPException(status_code=400, detail="player name must include first and last name")
+
+    first_name = name_split[0]
+    last_name = " ".join(name_split[1:])
+    logger.debug(f"parsed player name: {last_name}, {first_name}")
+    return last_name, first_name
 
 
 async def get_all_pitches(

@@ -67,7 +67,7 @@ Lookup player IDs and metadata by name.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `name` | string | Required | Player name in "First Last" format |
+| `name` | string | Required | Player name in "First Last" format (suffixes/compound last names supported) |
 | `fuzzy` | boolean | `true` | Use fuzzy matching for name lookup |
 | `limit` | integer | `1` | Number of candidates to return |
 
