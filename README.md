@@ -145,36 +145,22 @@ Full documentation is available in the [docs/](docs/) folder:
 
 ## Methodology
 
-PitchPredict offers two algorithms:
+PitchPredict offers two algorithms (details in [Algorithms](docs/algorithms.md)):
 
 ### Similarity Algorithm
 
 Finds historical pitches most similar to the current game context using weighted nearest-neighbor analysis:
 
-1. Fetch all pitches thrown by the pitcher from Statcast
-2. Score each pitch based on similarity to the current context (batter, count, score, date)
-3. Sample the top 5% most similar pitches
-4. Aggregate statistics to produce predictions
+1. Fetch all pitches thrown by the pitcher from Statcast (2015-01-01 through the requested `game_date`).
+2. Compute similarity scores across contextual features (batter ID, counts, bases, score, inning, date, fielders, rest days, strike zone) using softmaxed weights from `SimilarityWeights`.
+3. Sample the top `sample_pctg` (default 0.05) most similar pitches.
+4. Aggregate statistics and sample concrete pitches to produce predictions.
 
-**Similarity weights for pitcher predictions:**
-- Batter: 35%
-- Ball count: 20%
-- Strike count: 20%
-- Batting team score: 10%
-- Fielding team score: 10%
-- Game date: 5%
-
-**Similarity weights for batted ball predictions:**
-- Exit velocity: 45% (continuous, 15 mph tolerance)
-- Launch angle: 40% (continuous, 20° tolerance)
-- Spray angle: 5%
-- Bases state: 5%
-- Outs: 3%
-- Date recency: 2%
+**Batted ball predictions** use continuous similarity scoring on exit velocity and launch angle, plus optional spray angle, bases state, outs, and date recency, then sample the top similar events for outcome probabilities and expected stats.
 
 ### Deep Learning Algorithm
 
-Uses an xLSTM neural network trained on pitch sequences with a 270-token vocabulary encoding pitch type, speed, spin, location, and result. Considers 28 contextual features including game state, player identities, and matchup history.
+Uses an xLSTM sequence model trained on pitch sequences with a 270-token vocabulary encoding pitch type, speed, spin, location, and result. The model consumes contextual features (player IDs, count, bases, score, inning, and more) to predict the next pitch token sequence, which is decoded back into pitch attributes and outcomes.
 
 ## Acknowledgements
 
