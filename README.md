@@ -47,15 +47,16 @@ uv sync
 
 ```python
 import asyncio
-from pybaseball import playerid_lookup
 from pitchpredict import PitchPredict
 
 async def main():
     client = PitchPredict()
 
-    # Resolve MLBAM IDs (via pybaseball) for pitcher/batter
-    pitcher_id = int(playerid_lookup("Kershaw", "Clayton").iloc[0]["key_mlbam"])
-    batter_id = int(playerid_lookup("Judge", "Aaron").iloc[0]["key_mlbam"])
+    # Resolve MLBAM IDs (cached) for pitcher/batter
+    pitcher_record = (await client.get_player_records_from_name("Clayton Kershaw"))[0]
+    batter_record = (await client.get_player_records_from_name("Aaron Judge"))[0]
+    pitcher_id = int(pitcher_record["key_mlbam"])
+    batter_id = int(batter_record["key_mlbam"])
 
     # Predict pitcher's next pitch
     result = await client.predict_pitcher(
@@ -75,7 +76,7 @@ async def main():
 asyncio.run(main())
 ```
 
-Pitcher and batter IDs are MLBAM IDs; use `pybaseball.playerid_lookup` as shown above to resolve names.
+Pitcher and batter IDs are MLBAM IDs; use `PitchPredict.get_player_records_from_name` (or the REST `/players/lookup` endpoint) to resolve names.
 Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
 Caching is enabled by default and stores data in `.pitchpredict_cache`. Delete the folder to refresh cached data.
@@ -105,7 +106,7 @@ curl -X POST http://localhost:8056/predict/pitcher \
   }'
 ```
 
-`pitcher_id` and `batter_id` are MLBAM IDs; use `pybaseball.playerid_lookup` to resolve names.
+`pitcher_id` and `batter_id` are MLBAM IDs; use `/players/lookup` to resolve names.
 
 Predict batted ball outcomes:
 

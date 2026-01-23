@@ -10,6 +10,11 @@ import pybaseball # type: ignore
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
 from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
 from pitchpredict.backend.caching import PitchPredictCache
+from pitchpredict.backend.fetching import (
+    get_player_id_from_name,
+    get_player_record_from_id,
+    get_player_records_from_name,
+)
 from pitchpredict.backend.logging import init_logger
 import pitchpredict.types.api as api_types
 
@@ -81,6 +86,76 @@ class PitchPredict:
                 raise ValueError(f"unrecognized algorithm: {algorithm}")
 
         self.logger.debug("post-initialization tasks completed")
+
+    async def get_player_id_from_name(
+        self,
+        player_name: str,
+        fuzzy_lookup: bool | None = None,
+    ) -> int:
+        """
+        Resolve a player's MLBAM ID from their name.
+        """
+        self.logger.debug("get_player_id_from_name called")
+
+        if fuzzy_lookup is None:
+            fuzzy_lookup = self.fuzzy_player_lookup
+        try:
+            return await get_player_id_from_name(
+                player_name=player_name,
+                fuzzy_lookup=fuzzy_lookup,
+                cache=getattr(self, "cache", None),
+            )
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def get_player_records_from_name(
+        self,
+        player_name: str,
+        fuzzy_lookup: bool | None = None,
+        limit: int = 1,
+    ) -> list[dict[str, Any]]:
+        """
+        Resolve player records from a name, returning up to `limit` candidates.
+        """
+        self.logger.debug("get_player_records_from_name called")
+
+        if fuzzy_lookup is None:
+            fuzzy_lookup = self.fuzzy_player_lookup
+        try:
+            return await get_player_records_from_name(
+                player_name=player_name,
+                fuzzy_lookup=fuzzy_lookup,
+                limit=limit,
+                cache=getattr(self, "cache", None),
+            )
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def get_player_record_from_id(self, mlbam_id: int) -> dict[str, Any]:
+        """
+        Resolve a player record from an MLBAM ID.
+        """
+        self.logger.debug("get_player_record_from_id called")
+
+        try:
+            return await get_player_record_from_id(
+                mlbam_id=mlbam_id,
+                cache=getattr(self, "cache", None),
+            )
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
     async def predict_pitcher(
         self,
