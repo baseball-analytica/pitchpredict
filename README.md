@@ -14,6 +14,7 @@ Cutting-edge MLB pitch-predicting software utilizing the latest Statcast data. O
 - **Multiple interfaces**: Python API, REST API server, and CLI
 - **Rich predictions**: Pitch type probabilities, speed/location distributions, outcome analysis
 - **Batted ball predictions**: Outcome probabilities from exit velocity and launch angle with context-aware filtering
+- **Disk-backed caching**: Parquet cache with incremental Statcast updates
 - **Statcast powered**: Uses MLB's comprehensive pitch tracking data via [pybaseball]
 
 ## Installation
@@ -69,6 +70,8 @@ async def main():
 asyncio.run(main())
 ```
 
+Caching is enabled by default and stores data in `.pitchpredict_cache`. Delete the folder to refresh cached data.
+
 ### REST API Server
 
 Start the server:
@@ -116,6 +119,7 @@ Full documentation is available in the [docs/](docs/) folder:
 - [REST API Reference](docs/rest-api.md) - Server endpoints
 - [CLI Reference](docs/cli.md) - Command-line interface
 - [Algorithms](docs/algorithms.md) - Similarity and deep learning algorithms
+- [Caching](docs/caching.md) - Cache behavior and storage layout
 
 ## Methodology
 

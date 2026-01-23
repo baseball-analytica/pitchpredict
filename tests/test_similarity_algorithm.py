@@ -112,6 +112,7 @@ async def test_get_cached_pitches_for_pitcher_reuses_cache(monkeypatch: pytest.M
         pitcher_id: int,
         start_date: str,
         end_date: str | None = None,
+        cache: object | None = None,
     ) -> pd.DataFrame:
         calls.append(
             {

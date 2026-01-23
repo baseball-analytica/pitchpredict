@@ -16,12 +16,14 @@ PitchPredict is cutting-edge MLB pitch prediction software that predicts pitcher
 - [REST API Reference](rest-api.md) - FastAPI server endpoints
 - [CLI Reference](cli.md) - Command-line interface
 - [Algorithms](algorithms.md) - Similarity and deep learning algorithms
+- [Caching](caching.md) - Cache behavior and storage layout
 
 ## Features
 
 - **Two prediction algorithms**: Similarity-based (nearest neighbor) and deep learning (xLSTM)
 - **Multiple interfaces**: Python API, REST API server, and CLI
 - **Rich data output**: Pitch type probabilities, speed/location distributions, outcome predictions
+- **Disk-backed caching**: Parquet cache with incremental Statcast updates
 - **Statcast integration**: Uses MLB's Statcast data via [pybaseball](https://github.com/jldbc/pybaseball)
 
 ## Basic Usage

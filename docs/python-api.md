@@ -36,6 +36,10 @@ PitchPredict(
 | `fuzzy_player_lookup` | `bool` | `True` | Enable fuzzy matching for player names |
 | `algorithms` | `dict` | `None` | Custom algorithm implementations |
 
+#### Caching
+
+Caching is enabled by default and stores Parquet datasets plus small metadata files in `cache_dir`. See [Caching](caching.md) for layout and update behavior.
+
 #### Example
 
 ```python

@@ -909,7 +909,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             self.logger.debug(f"start time: {start_time}")
 
             # Fetch batted ball data
-            batted_balls = await get_all_batted_balls()
+            batted_balls = await get_all_batted_balls(cache=self.cache)
             self.logger.debug(f"successfully fetched {batted_balls.shape[0]} batted balls")
 
             sample_pctg = 0.05
@@ -1323,6 +1323,35 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 if result_value is None or pd.isna(result_value):
                     result_value = getattr(pitch, "description", None)
                 result = "unknown" if result_value is None or pd.isna(result_value) else str(result_value)
+
+                if speed is None or pd.isna(speed):
+                    continue
+                if spin_rate is None or pd.isna(spin_rate):
+                    continue
+                if spin_axis is None or pd.isna(spin_axis):
+                    continue
+                if release_pos_x is None or pd.isna(release_pos_x):
+                    continue
+                if release_pos_z is None or pd.isna(release_pos_z):
+                    continue
+                if release_extension is None or pd.isna(release_extension):
+                    continue
+                if vx0 is None or pd.isna(vx0):
+                    continue
+                if vy0 is None or pd.isna(vy0):
+                    continue
+                if vz0 is None or pd.isna(vz0):
+                    continue
+                if ax is None or pd.isna(ax):
+                    continue
+                if ay is None or pd.isna(ay):
+                    continue
+                if az is None or pd.isna(az):
+                    continue
+                if plate_pos_x is None or pd.isna(plate_pos_x):
+                    continue
+                if plate_pos_z is None or pd.isna(plate_pos_z):
+                    continue
 
                 sampled_pitch = api_types.Pitch(
                     pitch_type=str(pitch_type),
