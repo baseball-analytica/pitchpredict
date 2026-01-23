@@ -139,7 +139,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 sample_pctg=sample_pctg,
             )
 
-            self.logger.info("predict_pitcher completed successfully")
+            self.logger.debug("predict_pitcher completed successfully")
 
             return api_types.PredictPitcherResponse(
                 basic_pitch_data=basic_pitch_data,
@@ -221,7 +221,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 sample_pctg=sample_pctg,
             )
 
-            self.logger.info("predict_batter completed successfully")
+            self.logger.debug("predict_batter completed successfully")
 
             return {
                 "algorithm_metadata": self.get_metadata(),
@@ -352,7 +352,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             n_samples = max(100, int(len(pitches) * sample_pctg))
             pitches = pitches.head(n_samples)
 
-            self.logger.info(f"successfully fetched {pitches.shape[0]} similar pitches")
+            self.logger.debug(f"successfully fetched {pitches.shape[0]} similar pitches")
             return pitches
 
         except HTTPException as e:
@@ -413,7 +413,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             pitches = pitches.sort_values(by="similarity_score", ascending=False)
             pitches = pitches.head(int(len(pitches) * sample_pctg))
 
-            self.logger.info(f"successfully fetched {pitches.shape[0]} similar pitches")
+            self.logger.debug(f"successfully fetched {pitches.shape[0]} similar pitches")
             return pitches
 
         except HTTPException as e:
@@ -632,7 +632,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 },
             }
 
-            self.logger.info("digest_pitch_data completed successfully")
+            self.logger.debug("digest_pitch_data completed successfully")
             return basic, detailed
 
         except HTTPException as e:
@@ -766,7 +766,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 }
             }
 
-            self.logger.info("digest_outcome_data completed successfully")
+            self.logger.debug("digest_outcome_data completed successfully")
             return basic, detailed
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")
@@ -820,7 +820,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             if not isinstance(sample_pctg, float):
                 raise ValueError("sample_pctg must be a float")
 
-            self.logger.info("get_pitcher_prediction_metadata completed successfully")
+            self.logger.debug("get_pitcher_prediction_metadata completed successfully")
             return {
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
@@ -872,7 +872,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             if not isinstance(sample_pctg, float):
                 raise ValueError("sample_pctg must be a float")
 
-            self.logger.info("get_batter_prediction_metadata completed successfully")
+            self.logger.debug("get_batter_prediction_metadata completed successfully")
             return {
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
@@ -945,7 +945,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 sample_pctg=sample_pctg,
             )
 
-            self.logger.info("predict_batted_ball completed successfully")
+            self.logger.debug("predict_batted_ball completed successfully")
 
             return {
                 "algorithm_metadata": self.get_metadata(),
@@ -1067,7 +1067,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             n_samples = max(100, int(len(batted_balls) * sample_pctg))
             similar = batted_balls.head(n_samples)
 
-            self.logger.info(f"successfully found {similar.shape[0]} similar batted balls")
+            self.logger.debug(f"successfully found {similar.shape[0]} similar batted balls")
             return similar
 
         except HTTPException as e:
@@ -1190,7 +1190,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 }
             }
 
-            self.logger.info("_digest_batted_ball_outcome_data completed successfully")
+            self.logger.debug("_digest_batted_ball_outcome_data completed successfully")
             return basic, detailed
 
         except HTTPException as e:
@@ -1245,7 +1245,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "date": 0.02,
             }
 
-            self.logger.info("get_batted_ball_prediction_metadata completed successfully")
+            self.logger.debug("get_batted_ball_prediction_metadata completed successfully")
             return {
                 "n_batted_balls_sampled": n_batted_balls_sampled,
                 "sample_pctg": sample_pctg,

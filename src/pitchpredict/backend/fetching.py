@@ -98,7 +98,7 @@ async def get_pitches_from_pitcher(
                     raise HTTPException(status_code=500, detail=str(exc))
 
                 if new_pitches.empty:
-                    logger.info("no new pitches found for pitcher %s between %s and %s", pitcher_id, fetch_start, end_date)
+                    logger.debug("no new pitches found for pitcher %s between %s and %s", pitcher_id, fetch_start, end_date)
                     combined = cached_data
                 else:
                     combined = pd.concat([cached_data, new_pitches], ignore_index=True)
@@ -173,7 +173,7 @@ async def get_pitches_to_batter(
                     raise HTTPException(status_code=500, detail=str(exc))
 
                 if new_pitches.empty:
-                    logger.info(f"no new pitches found for batter {batter_id} between {fetch_start} and {end_date}")
+                    logger.debug(f"no new pitches found for batter {batter_id} between {fetch_start} and {end_date}")
                     combined = cached_data
                 else:
                     combined = pd.concat([cached_data, new_pitches], ignore_index=True)
@@ -445,7 +445,7 @@ async def get_all_batted_balls(
                     raise HTTPException(status_code=500, detail=str(exc))
 
                 if pitches.empty:
-                    logger.info("no new batted balls found between %s and %s", fetch_start, end_date)
+                    logger.debug("no new batted balls found between %s and %s", fetch_start, end_date)
                     combined = cached_data
                 else:
                     batted_balls = pitches[
@@ -483,7 +483,7 @@ async def get_all_batted_balls(
             logger.error(f"no batted ball events found between {start_date} and {end_date}")
             raise HTTPException(status_code=404, detail=f"no batted ball events found between {start_date} and {end_date}")
 
-        logger.info(f"fetched {batted_balls.shape[0]} batted ball events successfully")
+        logger.debug(f"fetched {batted_balls.shape[0]} batted ball events successfully")
         if cache is not None:
             cache.set_batted_balls(start_date=start_date, end_date=end_date, batted_balls=batted_balls)
         return batted_balls
