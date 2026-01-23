@@ -9,6 +9,7 @@ from fastapi import HTTPException
 import pandas as pd
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
+from pitchpredict.backend.caching import PitchPredictCache
 from pitchpredict.backend.fetching import get_pitches_from_pitcher, get_pitches_to_batter, get_player_id_from_name, get_all_batted_balls
 import pitchpredict.types.api as api_types
 import pitchpredict.backend.algs.similarity.types as similarity_types
@@ -21,11 +22,16 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     def __init__(
         self,
         name: str = "similarity",
+        cache: PitchPredictCache | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(name, **kwargs)
         self.logger = logging.getLogger("pitchpredict.backend.algs.similarity")
         self._pitcher_cache: dict[int, tuple[pd.Timestamp, pd.DataFrame]] = {}
+        self.cache = cache
+
+    def set_cache(self, cache: PitchPredictCache | None) -> None:
+        self.cache = cache
 
     def _normalize_end_date(self, end_date: str | None) -> pd.Timestamp:
         if end_date is None:
@@ -65,6 +71,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             pitcher_id=pitcher_id,
             start_date="2015-01-01",
             end_date=normalized_end_date.strftime("%Y-%m-%d"),
+            cache=self.cache,
         )
         pitches = self._ensure_game_date_dt(pitches)
         self._pitcher_cache[pitcher_id] = (normalized_end_date, pitches)
@@ -173,13 +180,14 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             start_time = datetime.now()
             self.logger.debug(f"start time: {start_time}")
 
-            pitcher_id = await get_player_id_from_name(pitcher_name)
-            batter_id = await get_player_id_from_name(batter_name)
+            pitcher_id = await get_player_id_from_name(pitcher_name, cache=self.cache)
+            batter_id = await get_player_id_from_name(batter_name, cache=self.cache)
 
             pitches = await get_pitches_to_batter(
                 batter_id=batter_id,
                 start_date="2015-01-01",
                 end_date=game_date,
+                cache=self.cache,
             )
             self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
 

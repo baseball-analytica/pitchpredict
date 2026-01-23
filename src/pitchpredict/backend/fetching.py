@@ -8,6 +8,8 @@ from fastapi import HTTPException
 import pandas as pd
 import pybaseball # type: ignore
 
+from pitchpredict.backend.caching import PitchPredictCache
+
 logger = logging.getLogger("pitchpredict.backend.fetching")
 
 
@@ -15,6 +17,7 @@ async def get_pitches_from_pitcher(
     pitcher_id: int,
     start_date: str,
     end_date: str | None = None,
+    cache: PitchPredictCache | None = None,
 ) -> pd.DataFrame:
     """
     Given a pitcher's MLBAM ID, get a list of all their pitches thrown between `start_date` and `end_date`.
@@ -34,6 +37,11 @@ async def get_pitches_from_pitcher(
         logger.debug("end_date is None, using current date")
         end_date = datetime.now().strftime("%Y-%m-%d")
 
+    if cache is not None:
+        cached = cache.get_pitcher_pitches(pitcher_id=pitcher_id, end_date=end_date)
+        if cached is not None:
+            return cached
+
     try:
         logger.debug("fetching pitches from pitcher")
         pitches = pybaseball.statcast_pitcher(
@@ -47,6 +55,8 @@ async def get_pitches_from_pitcher(
             raise HTTPException(status_code=404, detail=f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}")
 
         logger.debug("pitches fetched successfully")
+        if cache is not None:
+            cache.set_pitcher_pitches(pitcher_id=pitcher_id, end_date=end_date, pitches=pitches)
         return pitches
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -60,6 +70,7 @@ async def get_pitches_to_batter(
     batter_id: int,
     start_date: str,
     end_date: str | None = None,
+    cache: PitchPredictCache | None = None,
 ) -> pd.DataFrame:
     """
     Given a batter's MLBAM ID, get a list of all the pitches thrown to them between `start_date` and `end_date`.
@@ -69,6 +80,11 @@ async def get_pitches_to_batter(
     if end_date is None:
         logger.debug("end_date is None, using current date")
         end_date = datetime.now().strftime("%Y-%m-%d")
+
+    if cache is not None:
+        cached = cache.get_batter_pitches(batter_id=batter_id, end_date=end_date)
+        if cached is not None:
+            return cached
 
     try:
         logger.debug("fetching pitches to batter")
@@ -83,6 +99,8 @@ async def get_pitches_to_batter(
             raise HTTPException(status_code=404, detail=f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}")
 
         logger.debug("pitches fetched successfully")
+        if cache is not None:
+            cache.set_batter_pitches(batter_id=batter_id, end_date=end_date, pitches=pitches)
         return pitches
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -95,6 +113,7 @@ async def get_pitches_to_batter(
 async def get_player_id_from_name(
     player_name: str,
     fuzzy_lookup: bool = True,
+    cache: PitchPredictCache | None = None,
 ) -> int:
     """
     Given a player's name, get their MLBAM ID.
@@ -104,6 +123,10 @@ async def get_player_id_from_name(
     try:
         last_name, first_name = _parse_player_name(player_name)
         logger.debug(f"parsed player name: {last_name}, {first_name}")
+        if cache is not None:
+            cached = cache.get_player_id(player_name=player_name, fuzzy_lookup=fuzzy_lookup)
+            if cached is not None:
+                return cached
         player_ids = pybaseball.playerid_lookup(
             last_name,
             first_name,
@@ -114,8 +137,11 @@ async def get_player_id_from_name(
             logger.error(f"no player found with name {player_name}")
             raise HTTPException(status_code=404, detail=f"no player found with name {player_name}")
 
-        logger.info(f"player ID fetched successfully for {player_name}: {player_ids.iloc[0]['key_mlbam']}")
-        return player_ids.iloc[0]["key_mlbam"]
+        player_id = int(player_ids.iloc[0]["key_mlbam"])
+        logger.info(f"player ID fetched successfully for {player_name}: {player_id}")
+        if cache is not None:
+            cache.set_player_id(player_name=player_name, player_id=player_id, fuzzy_lookup=fuzzy_lookup)
+        return player_id
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
         raise e

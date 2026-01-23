@@ -64,7 +64,12 @@ class PitchPredict:
         if self.enable_cache:
             self.cache = PitchPredictCache(cache_dir=self.cache_dir)
             self.logger.info("cache initialized")
-        
+            for alg in self.algorithms.values():
+                if hasattr(alg, "set_cache"):
+                    alg.set_cache(self.cache)
+                elif hasattr(alg, "cache"):
+                    alg.cache = self.cache
+
         # check algorithms
         VALID_ALGORITHMS = ["similarity", "deep"]
         if self.algorithms == []:
