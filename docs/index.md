@@ -38,14 +38,13 @@ uv pip install pitchpredict
 
 ```python
 import asyncio
-from pybaseball import playerid_lookup
 from pitchpredict import PitchPredict
 
 async def main():
     client = PitchPredict()
     result = await client.predict_pitcher(
-        pitcher_id=int(playerid_lookup("Kershaw", "Clayton").iloc[0]["key_mlbam"]),
-        batter_id=int(playerid_lookup("Judge", "Aaron").iloc[0]["key_mlbam"]),
+        pitcher_id=await client.get_player_id_from_name("Clayton Kershaw"),
+        batter_id=await client.get_player_id_from_name("Aaron Judge"),
         count_balls=0,
         count_strikes=0,
         score_bat=0,

@@ -53,10 +53,8 @@ async def main():
     client = PitchPredict()
 
     # Resolve MLBAM IDs (cached) for pitcher/batter
-    pitcher_record = (await client.get_player_records_from_name("Clayton Kershaw"))[0]
-    batter_record = (await client.get_player_records_from_name("Aaron Judge"))[0]
-    pitcher_id = int(pitcher_record["key_mlbam"])
-    batter_id = int(batter_record["key_mlbam"])
+    pitcher_id = await client.get_player_id_from_name("Clayton Kershaw")
+    batter_id = await client.get_player_id_from_name("Aaron Judge")
 
     # Predict pitcher's next pitch
     result = await client.predict_pitcher(
@@ -76,7 +74,7 @@ async def main():
 asyncio.run(main())
 ```
 
-Pitcher and batter IDs are MLBAM IDs; use `PitchPredict.get_player_records_from_name` (or the REST `/players/lookup` endpoint) to resolve names.
+Pitcher and batter IDs are MLBAM IDs; use `PitchPredict.get_player_id_from_name` (or the REST `/players/lookup` endpoint) to resolve names.
 Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
 Caching is enabled by default and stores data in `.pitchpredict_cache`. Delete the folder to refresh cached data.
@@ -90,6 +88,13 @@ pitchpredict serve
 ```
 
 Make a prediction:
+
+```bash
+curl "http://localhost:8056/players/lookup?name=Clayton%20Kershaw&fuzzy=true"
+curl "http://localhost:8056/players/lookup?name=Aaron%20Judge&fuzzy=true"
+```
+
+Use the returned `key_mlbam` values in the prediction request:
 
 ```bash
 curl -X POST http://localhost:8056/predict/pitcher \

@@ -20,7 +20,6 @@ For development installation, see the [Installation Guide](installation.md).
 
 ```python
 import asyncio
-from pybaseball import playerid_lookup
 from pitchpredict import PitchPredict
 
 async def main():
@@ -29,8 +28,8 @@ async def main():
 
     # Predict a pitcher's next pitch
     result = await client.predict_pitcher(
-        pitcher_id=int(playerid_lookup("Kershaw", "Clayton").iloc[0]["key_mlbam"]),
-        batter_id=int(playerid_lookup("Judge", "Aaron").iloc[0]["key_mlbam"]),
+        pitcher_id=await client.get_player_id_from_name("Clayton Kershaw"),
+        batter_id=await client.get_player_id_from_name("Aaron Judge"),
         count_balls=0,
         count_strikes=0,
         score_bat=0,
@@ -50,7 +49,7 @@ async def main():
 asyncio.run(main())
 ```
 
-Pitcher and batter IDs are MLBAM IDs; use `pybaseball.playerid_lookup` as shown above to resolve names.
+Pitcher and batter IDs are MLBAM IDs; use `PitchPredict.get_player_id_from_name` as shown above to resolve names.
 Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
 ## Quick Start: REST API Server
@@ -64,6 +63,13 @@ pitchpredict serve
 The server runs on `http://localhost:8056` by default.
 
 Make a prediction request:
+
+```bash
+curl "http://localhost:8056/players/lookup?name=Clayton%20Kershaw&fuzzy=true"
+curl "http://localhost:8056/players/lookup?name=Aaron%20Judge&fuzzy=true"
+```
+
+Use the returned `key_mlbam` values in the prediction request:
 
 ```bash
 curl -X POST http://localhost:8056/predict/pitcher \
