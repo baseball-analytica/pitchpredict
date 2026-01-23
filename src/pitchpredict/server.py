@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 import uvicorn
 
 from pitchpredict.api import PitchPredict
+from pitchpredict.backend.fetching import get_player_record_from_id, get_player_records_from_name
 import pitchpredict.utils as utils
 import pitchpredict.types.api as api_types
 
@@ -124,6 +125,56 @@ async def predict_batted_ball_endpoint(request: api_types.PredictBattedBallReque
             basic_outcome_data=result["basic_outcome_data"],
             detailed_outcome_data=result["detailed_outcome_data"],
             prediction_metadata=result["prediction_metadata"],
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/players/lookup")
+async def lookup_player_endpoint(
+    name: str,
+    fuzzy: bool = True,
+    limit: int = 1,
+) -> api_types.PlayerLookupResponse:
+    """
+    Lookup player IDs and metadata by name.
+    """
+    try:
+        api = app.state.api
+        cache = getattr(api, "cache", None)
+        results = await get_player_records_from_name(
+            player_name=name,
+            fuzzy_lookup=fuzzy,
+            limit=limit,
+            cache=cache,
+        )
+        return api_types.PlayerLookupResponse(
+            query=name,
+            fuzzy=fuzzy,
+            results=results,
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/players/{mlbam_id}")
+async def get_player_by_id_endpoint(mlbam_id: int) -> api_types.PlayerRecordResponse:
+    """
+    Lookup player metadata by MLBAM ID.
+    """
+    try:
+        api = app.state.api
+        cache = getattr(api, "cache", None)
+        record = await get_player_record_from_id(
+            mlbam_id=mlbam_id,
+            cache=cache,
+        )
+        return api_types.PlayerRecordResponse(
+            mlbam_id=mlbam_id,
+            record=record,
         )
     except HTTPException as e:
         raise e

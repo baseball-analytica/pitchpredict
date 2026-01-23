@@ -118,3 +118,13 @@ class PredictBattedBallResponse(BaseModel):
     detailed_outcome_data: dict[str, Any]
     prediction_metadata: dict[str, Any]
 
+
+class PlayerLookupResponse(BaseModel):
+    query: str
+    fuzzy: bool
+    results: list[dict[str, Any]]
+
+
+class PlayerRecordResponse(BaseModel):
+    mlbam_id: int
+    record: dict[str, Any]

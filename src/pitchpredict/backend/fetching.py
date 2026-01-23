@@ -24,6 +24,27 @@ def _filter_pitches_by_range(pitches: pd.DataFrame, start_date: str, end_date: s
     return pitches.loc[mask].copy(deep=False)
 
 
+def _coerce_record_value(value: object) -> object:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (pd.Timestamp, datetime)):
+        return value.isoformat()
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def _records_from_player_df(player_ids: pd.DataFrame) -> list[dict[str, object]]:
+    records = player_ids.where(pd.notna(player_ids), None).to_dict(orient="records")
+    return [
+        {key: _coerce_record_value(value) for key, value in record.items()}
+        for record in records
+    ]
+
+
 async def get_pitches_from_pitcher(
     pitcher_id: int,
     start_date: str,
@@ -215,6 +236,85 @@ async def get_player_id_from_name(
         if cache is not None:
             cache.set_player_id(player_name=player_name, player_id=player_id, fuzzy_lookup=fuzzy_lookup)
         return player_id
+    except HTTPException as e:
+        logger.error(f"encountered HTTPException: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"encountered Exception: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def get_player_records_from_name(
+    player_name: str,
+    fuzzy_lookup: bool = True,
+    limit: int = 1,
+    cache: PitchPredictCache | None = None,
+) -> list[dict[str, object]]:
+    """
+    Given a player's name, return matching player records from pybaseball.
+    """
+    logger.debug("get_player_records_from_name called")
+
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="limit must be >= 1")
+
+    try:
+        last_name, first_name = _parse_player_name(player_name)
+        logger.debug(f"parsed player name: {last_name}, {first_name}")
+        if cache is not None:
+            cached = cache.get_player_records(player_name=player_name, fuzzy_lookup=fuzzy_lookup)
+            if cached is not None:
+                return cached[:limit]
+
+        player_ids = pybaseball.playerid_lookup(
+            last_name,
+            first_name,
+            fuzzy=fuzzy_lookup
+        )
+
+        if player_ids.empty:
+            logger.error(f"no player found with name {player_name}")
+            raise HTTPException(status_code=404, detail=f"no player found with name {player_name}")
+
+        records = _records_from_player_df(player_ids)
+        if cache is not None:
+            cache.set_player_records(player_name=player_name, fuzzy_lookup=fuzzy_lookup, records=records)
+        return records[:limit]
+    except HTTPException as e:
+        logger.error(f"encountered HTTPException: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"encountered Exception: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def get_player_record_from_id(
+    mlbam_id: int,
+    cache: PitchPredictCache | None = None,
+) -> dict[str, object]:
+    """
+    Given an MLBAM ID, return the full pybaseball player record.
+    """
+    logger.debug("get_player_record_from_id called")
+
+    if cache is not None:
+        cached = cache.get_player_record_by_id(mlbam_id=mlbam_id)
+        if cached is not None:
+            return cached
+
+    try:
+        if not hasattr(pybaseball, "playerid_reverse_lookup"):
+            raise HTTPException(status_code=500, detail="pybaseball.playerid_reverse_lookup is unavailable")
+
+        player_ids = pybaseball.playerid_reverse_lookup([mlbam_id])
+        if player_ids.empty:
+            logger.error(f"no player found with id {mlbam_id}")
+            raise HTTPException(status_code=404, detail=f"no player found with id {mlbam_id}")
+
+        record = _records_from_player_df(player_ids)[0]
+        if cache is not None:
+            cache.set_player_record_by_id(mlbam_id=mlbam_id, record=record)
+        return record
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
         raise e

@@ -32,7 +32,11 @@ class PitchPredictCache:
         self._batted_ball_meta_path = self._batted_ball_dir / "batted_balls.meta.json"
         self._player_dir = self.cache_dir / "players"
         self._player_index_path = self._player_dir / "name_to_id.json"
+        self._player_records_path = self._player_dir / "name_to_records.json"
+        self._player_id_records_path = self._player_dir / "id_to_record.json"
         self._player_index: dict[str, int] | None = None
+        self._player_records_index: dict[str, list[dict[str, object]]] | None = None
+        self._player_id_records: dict[str, dict[str, object]] | None = None
         self.__post_init__()
 
     def __post_init__(self) -> None:
@@ -382,11 +386,80 @@ class PitchPredictCache:
             json.dump(data, handle, indent=2, sort_keys=True)
         os.replace(tmp_path, self._player_index_path)
 
+    def _load_player_records_index(self) -> dict[str, list[dict[str, object]]]:
+        if self._player_records_index is not None:
+            return self._player_records_index
+        if not self._player_records_path.exists():
+            self._player_records_index = {}
+            return self._player_records_index
+        try:
+            with self._player_records_path.open("r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            if isinstance(data, dict):
+                cleaned: dict[str, list[dict[str, object]]] = {}
+                for key, value in data.items():
+                    if isinstance(value, list):
+                        cleaned[key] = [record for record in value if isinstance(record, dict)]
+                self._player_records_index = cleaned
+            else:
+                self._player_records_index = {}
+        except Exception as exc:
+            self.logger.warning(f"failed to read player records cache: {exc}")
+            self._player_records_index = {}
+        return self._player_records_index
+
+    def _write_player_records_index(self, data: dict[str, list[dict[str, object]]]) -> None:
+        tmp_path = self._player_records_path.parent / f"{self._player_records_path.name}.tmp"
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, sort_keys=True)
+        os.replace(tmp_path, self._player_records_path)
+
+    def _load_player_id_records(self) -> dict[str, dict[str, object]]:
+        if self._player_id_records is not None:
+            return self._player_id_records
+        if not self._player_id_records_path.exists():
+            self._player_id_records = {}
+            return self._player_id_records
+        try:
+            with self._player_id_records_path.open("r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            if isinstance(data, dict):
+                cleaned = {
+                    str(key): value for key, value in data.items() if isinstance(value, dict)
+                }
+                self._player_id_records = cleaned
+            else:
+                self._player_id_records = {}
+        except Exception as exc:
+            self.logger.warning(f"failed to read player id cache: {exc}")
+            self._player_id_records = {}
+        return self._player_id_records
+
+    def _write_player_id_records(self, data: dict[str, dict[str, object]]) -> None:
+        tmp_path = self._player_id_records_path.parent / f"{self._player_id_records_path.name}.tmp"
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, sort_keys=True)
+        os.replace(tmp_path, self._player_id_records_path)
+
+    def _extract_mlbam_id(self, record: dict[str, object]) -> int | None:
+        for key in ("key_mlbam", "mlbam_id"):
+            value = record.get(key)
+            if value is not None:
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+        return None
+
     def get_player_id(self, player_name: str, fuzzy_lookup: bool = True) -> int | None:
         """Lookup a cached player ID by normalized name."""
         key = self._normalize_player_key(player_name, fuzzy_lookup)
         data = self._load_player_index()
         player_id = data.get(key)
+        if player_id is None:
+            records = self._load_player_records_index().get(key)
+            if records:
+                player_id = self._extract_mlbam_id(records[0])
         if player_id is not None:
             self.logger.debug(f"cache hit for player {player_name}")
         return player_id
@@ -399,3 +472,56 @@ class PitchPredictCache:
         self._write_player_index(data)
         self._player_index = data
         self.logger.debug(f"cached player id for {player_name}")
+
+    def get_player_records(self, player_name: str, fuzzy_lookup: bool = True) -> list[dict[str, object]] | None:
+        """Lookup cached player record list by name."""
+        key = self._normalize_player_key(player_name, fuzzy_lookup)
+        data = self._load_player_records_index()
+        records = data.get(key)
+        if records is not None:
+            self.logger.debug(f"cache hit for player records {player_name}")
+        return records
+
+    def set_player_records(
+        self,
+        player_name: str,
+        fuzzy_lookup: bool,
+        records: list[dict[str, object]],
+    ) -> None:
+        """Store a list of player records for a name lookup."""
+        key = self._normalize_player_key(player_name, fuzzy_lookup)
+        data = self._load_player_records_index()
+        data[key] = records
+        self._write_player_records_index(data)
+        self._player_records_index = data
+
+        if records:
+            mlbam_id = self._extract_mlbam_id(records[0])
+            if mlbam_id is not None:
+                self.set_player_id(player_name=player_name, player_id=mlbam_id, fuzzy_lookup=fuzzy_lookup)
+
+        id_records = self._load_player_id_records()
+        for record in records:
+            mlbam_id = self._extract_mlbam_id(record)
+            if mlbam_id is not None:
+                id_records[str(mlbam_id)] = record
+        if records:
+            self._write_player_id_records(id_records)
+            self._player_id_records = id_records
+        self.logger.debug(f"cached player records for {player_name}")
+
+    def get_player_record_by_id(self, mlbam_id: int) -> dict[str, object] | None:
+        """Lookup cached player record by MLBAM ID."""
+        data = self._load_player_id_records()
+        record = data.get(str(mlbam_id))
+        if record is not None:
+            self.logger.debug(f"cache hit for player id {mlbam_id}")
+        return record
+
+    def set_player_record_by_id(self, mlbam_id: int, record: dict[str, object]) -> None:
+        """Store a player record for reverse ID lookup."""
+        data = self._load_player_id_records()
+        data[str(mlbam_id)] = record
+        self._write_player_id_records(data)
+        self._player_id_records = data
+        self.logger.debug(f"cached player record for id {mlbam_id}")

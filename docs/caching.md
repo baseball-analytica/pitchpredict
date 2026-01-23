@@ -17,6 +17,8 @@ Cache files live in `cache_dir` (default `.pitchpredict_cache`) using Parquet fo
 - `batter/{batter_id}.parquet` + `batter/{batter_id}.meta.json`
 - `batted_ball/batted_balls.parquet` + `batted_ball/batted_balls.meta.json`
 - `players/name_to_id.json`
+- `players/name_to_records.json`
+- `players/id_to_record.json`
 
 ## Incremental Updates
 

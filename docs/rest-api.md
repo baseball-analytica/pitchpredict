@@ -59,6 +59,77 @@ curl http://localhost:8056/
 
 ---
 
+### GET /players/lookup
+
+Lookup player IDs and metadata by name.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | string | Required | Player name in "First Last" format |
+| `fuzzy` | boolean | `true` | Use fuzzy matching for name lookup |
+| `limit` | integer | `1` | Number of candidates to return |
+
+**Response:**
+
+```json
+{
+  "query": "Aaron Judge",
+  "fuzzy": true,
+  "results": [
+    {
+      "name_first": "Aaron",
+      "name_last": "Judge",
+      "name_full": "Aaron Judge",
+      "key_mlbam": 592450,
+      "mlb_played_first": 2016,
+      "mlb_played_last": 2024
+    }
+  ]
+}
+```
+
+The `results` entries are the full `pybaseball.playerid_lookup` records.
+
+**Example:**
+
+```bash
+curl "http://localhost:8056/players/lookup?name=Aaron%20Judge&fuzzy=true"
+```
+
+---
+
+### GET /players/{mlbam_id}
+
+Lookup player metadata by MLBAM ID.
+
+**Response:**
+
+```json
+{
+  "mlbam_id": 592450,
+  "record": {
+    "name_first": "Aaron",
+    "name_last": "Judge",
+    "name_full": "Aaron Judge",
+    "key_mlbam": 592450,
+    "mlb_played_first": 2016,
+    "mlb_played_last": 2024
+  }
+}
+```
+
+The `record` is the full `pybaseball.playerid_reverse_lookup` record.
+
+**Example:**
+
+```bash
+curl http://localhost:8056/players/592450
+```
+
+---
+
 ### POST /predict/pitcher
 
 Predict the pitcher's next pitch.

@@ -119,6 +119,18 @@ curl -X POST http://localhost:8056/predict/batted-ball \
   }'
 ```
 
+Lookup player IDs:
+
+```bash
+curl "http://localhost:8056/players/lookup?name=Aaron%20Judge&fuzzy=true"
+```
+
+Lookup player metadata by MLBAM ID:
+
+```bash
+curl http://localhost:8056/players/592450
+```
+
 ## Documentation
 
 Full documentation is available in the [docs/](docs/) folder:
