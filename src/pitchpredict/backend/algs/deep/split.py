@@ -35,7 +35,9 @@ def _load_tokens_memmap(tokens_path: Path) -> np.memmap:
     return np.memmap(tokens_path, dtype=TOKEN_DTYPE, mode="r", shape=(token_count,))
 
 
-def _load_context_memmaps(context_prefix: Path, sample_count: int) -> dict[str, np.memmap]:
+def _load_context_memmaps(
+    context_prefix: Path, sample_count: int
+) -> dict[str, np.memmap]:
     arrays: dict[str, np.memmap] = {}
     for field_name, spec in _CONTEXT_FIELD_SPECS.items():
         field_path = Path(_context_field_path(str(context_prefix), field_name))
@@ -47,7 +49,9 @@ def _load_context_memmaps(context_prefix: Path, sample_count: int) -> dict[str, 
             raise ValueError(
                 f"{field_path} has {file_size} bytes but expected {expected_size} for {sample_count} samples"
             )
-        arrays[field_name] = np.memmap(field_path, dtype=spec.dtype, mode="r", shape=(sample_count,))
+        arrays[field_name] = np.memmap(
+            field_path, dtype=spec.dtype, mode="r", shape=(sample_count,)
+        )
     return arrays
 
 
@@ -64,7 +68,9 @@ def plate_appearance_ranges(tokens: np.memmap) -> list[tuple[int, int]]:
     return ranges
 
 
-def compute_targets(total_tokens: int, val_ratio: float, test_ratio: float) -> tuple[int, int]:
+def compute_targets(
+    total_tokens: int, val_ratio: float, test_ratio: float
+) -> tuple[int, int]:
     val_target = max(0, int(round(total_tokens * val_ratio)))
     test_target = max(0, int(round(total_tokens * test_ratio)))
 
@@ -129,7 +135,9 @@ def _write_split_files(
     return token_count, len(ordered_indices)
 
 
-def _close_memmaps(tokens_memmap: np.memmap, context_arrays: dict[str, np.memmap]) -> None:
+def _close_memmaps(
+    tokens_memmap: np.memmap, context_arrays: dict[str, np.memmap]
+) -> None:
     tokens_memmap._mmap.close()  # type: ignore[attr-defined]
     for array in context_arrays.values():
         array._mmap.close()  # type: ignore[attr-defined]
@@ -189,7 +197,9 @@ def split_saved_dataset(
     val_ratio = max(0.0, float(val_ratio))
     test_ratio = max(0.0, float(test_ratio))
     if val_ratio == 0.0 and test_ratio == 0.0:
-        logger.info("Skipping dataset split because both val_ratio and test_ratio are 0.")
+        logger.info(
+            "Skipping dataset split because both val_ratio and test_ratio are 0."
+        )
         return {"train": 0, "val": 0, "test": 0}
 
     tokens_path = Path(tokens_path).resolve()
@@ -293,4 +303,3 @@ def split_saved_dataset(
         "val": val_token_count,
         "test": test_token_count,
     }
-

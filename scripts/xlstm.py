@@ -19,10 +19,15 @@ from torch.utils.checkpoint import checkpoint as ckpt
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-import wandb # type: ignore
+import wandb  # type: ignore
 
 from pitchpredict.backend.algs.deep.nn import PitchToken
-from pitchpredict.backend.algs.deep.dataset import PackedPitchDataset, PackedPitchChunk, PackedPitchContext, chunk_to_context
+from pitchpredict.backend.algs.deep.dataset import (
+    PackedPitchDataset,
+    PackedPitchChunk,
+    PackedPitchContext,
+    chunk_to_context,
+)
 
 """
 uv run torchrun --standalone --nproc_per_node=6 scripts/xlstm.py \
@@ -74,7 +79,12 @@ def log_if_main(s: str) -> None:
 
 def setup_wandb(cfg: "Config") -> None:
     if is_main_process():
-        wandb.init(project="baseball-xlstm", config=(asdict(cfg)), id=cfg.run_id, resume=("never" if cfg.run_id is None else "allow"))
+        wandb.init(
+            project="baseball-xlstm",
+            config=(asdict(cfg)),
+            id=cfg.run_id,
+            resume=("never" if cfg.run_id is None else "allow"),
+        )
         cfg.run_id = wandb.run.id
 
 
@@ -137,6 +147,7 @@ class Config:
     log_interval: int = 1
     eval_interval: int = 500
     ckpt_interval: int = 1000
+
 
 class mLSTMCellCore(nn.Module):
     def __init__(
@@ -513,6 +524,7 @@ class xLSTMBlock(nn.Module):
         y = z + self.drop(self.ff(self.pre2(z)))
         return y
 
+
 class PitchContextAdapter(nn.Module):
     def __init__(
         self,
@@ -525,22 +537,22 @@ class PitchContextAdapter(nn.Module):
 
         self.num_pitchers = num_pitchers
         self.num_batters = num_batters
-        
-        # Entity embeddings
-        self.pitched_emb = nn.Embedding(num_pitchers+1, 64, padding_idx=0)
-        self.batter_emb = nn.Embedding(num_batters+1, 64, padding_idx=0)
-        
-        # State embeddings
-        self.emb_p_throws = nn.Embedding(3, 8) # 0, 1, 2
-        self.emb_b_hits = nn.Embedding(4, 8) # 0, 1, 2, 3
-        self.emb_balls = nn.Embedding(5, 8) # 0-4
-        self.emb_strikes = nn.Embedding(4, 8) # 0-3
-        self.emb_outs = nn.Embedding(4, 8) # 0-3
-        self.emb_order = nn.Embedding(5, 8) # 0-4
-        self.emb_bases = nn.Embedding(9, 16) # 0-7 (bitmask) + pad
-        self.emb_inning = nn.Embedding(25, 16) # 1-24 (clip larger)
 
-        self.cat_emb_dim = 64+64+8+8+8+8+8+8+16+16
+        # Entity embeddings
+        self.pitched_emb = nn.Embedding(num_pitchers + 1, 64, padding_idx=0)
+        self.batter_emb = nn.Embedding(num_batters + 1, 64, padding_idx=0)
+
+        # State embeddings
+        self.emb_p_throws = nn.Embedding(3, 8)  # 0, 1, 2
+        self.emb_b_hits = nn.Embedding(4, 8)  # 0, 1, 2, 3
+        self.emb_balls = nn.Embedding(5, 8)  # 0-4
+        self.emb_strikes = nn.Embedding(4, 8)  # 0-3
+        self.emb_outs = nn.Embedding(4, 8)  # 0-3
+        self.emb_order = nn.Embedding(5, 8)  # 0-4
+        self.emb_bases = nn.Embedding(9, 16)  # 0-7 (bitmask) + pad
+        self.emb_inning = nn.Embedding(25, 16)  # 1-24 (clip larger)
+
+        self.cat_emb_dim = 64 + 64 + 8 + 8 + 8 + 8 + 8 + 8 + 16 + 16
 
         self.num_continuous = 6
 
@@ -558,12 +570,11 @@ class PitchContextAdapter(nn.Module):
         )
 
     def forward(self, chunk: PackedPitchContext) -> torch.Tensor:
-
         pid = chunk.pitcher_id % self.num_pitchers
         bid = chunk.batter_id % self.num_batters
 
-        pe = self.pitched_emb(pid+1)
-        be = self.batter_emb(bid+1)
+        pe = self.pitched_emb(pid + 1)
+        be = self.batter_emb(bid + 1)
         te = self.emb_p_throws(chunk.pitcher_throws.clamp(0, 3))
         he = self.emb_b_hits(chunk.batter_hits.clamp(0, 4))
         ball_e = self.emb_balls(chunk.count_balls.clamp(0, 5))
@@ -572,32 +583,48 @@ class PitchContextAdapter(nn.Module):
         base_e = self.emb_bases(chunk.bases_state.clamp(0, 9))
         order_e = self.emb_order(chunk.number_through_order.clamp(0, 4))
         inn_e = self.emb_inning(chunk.inning.clamp(0, 24))
-        
-        cont_input = torch.stack([
-            chunk.pitcher_age,
-            chunk.batter_age,
-            chunk.score_bat,
-            chunk.score_fld,
-            chunk.pitch_number,
-            chunk.game_date,
-        ], dim=-1)
+
+        cont_input = torch.stack(
+            [
+                chunk.pitcher_age,
+                chunk.batter_age,
+                chunk.score_bat,
+                chunk.score_fld,
+                chunk.pitch_number,
+                chunk.game_date,
+            ],
+            dim=-1,
+        )
 
         cont_feats = self.cont_proj(cont_input)
 
-        combined = torch.cat([
-            pe, be,
-            te, he, ball_e, str_e, out_e, order_e, base_e, inn_e,
-            cont_feats,
-        ], dim=-1)
+        combined = torch.cat(
+            [
+                pe,
+                be,
+                te,
+                he,
+                ball_e,
+                str_e,
+                out_e,
+                order_e,
+                base_e,
+                inn_e,
+                cont_feats,
+            ],
+            dim=-1,
+        )
 
         return self.fusion(combined)
+
 
 class FusionLayer(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1):
         super().__init__()
-        self.proj = nn.Linear(d_model*2, d_model)
+        self.proj = nn.Linear(d_model * 2, d_model)
         self.norm = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
+
     def forward(self, x_seq: torch.Tensor, x_ctx: torch.Tensor) -> torch.Tensor:
         combined = torch.cat([x_seq, x_ctx], dim=-1)
 
@@ -605,7 +632,7 @@ class FusionLayer(nn.Module):
         out = self.norm(out)
         out = self.dropout(out)
         return out
-        
+
 
 class BaseballxLSTM(nn.Module):
     """
@@ -658,10 +685,14 @@ class BaseballxLSTM(nn.Module):
 
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
         if tie_weights:
-            self.lm_head.weight = self.token_embed.weight  # paper did not tie; keep toggle
+            self.lm_head.weight = (
+                self.token_embed.weight
+            )  # paper did not tie; keep toggle
         self.eod_id = eod_id
 
-    def forward(self, x_seq_ids: torch.LongTensor, x_ctx: PackedPitchContext) -> torch.Tensor:
+    def forward(
+        self, x_seq_ids: torch.LongTensor, x_ctx: PackedPitchContext
+    ) -> torch.Tensor:
         x_seq = self.token_embed(x_seq_ids)
         x_ctx = self.context_adapter(x_ctx)
         x = self.fusion(x_seq, x_ctx)
@@ -896,15 +927,13 @@ def evaluate(
 
 def train(rank: int, world_size: int, cfg: Config) -> None:
     ddp_setup(rank, world_size)
-    
+
     set_seed(cfg.seed + rank)
 
     device = torch.device(f"cuda:{rank}")
 
     if is_main_process():
-        log_if_main(
-            "Preparing dataset ..."
-        )
+        log_if_main("Preparing dataset ...")
 
     val_dir = os.path.join(cfg.data_dir, "val")
     test_dir = os.path.join(cfg.data_dir, "test")
@@ -1020,7 +1049,9 @@ def train(rank: int, world_size: int, cfg: Config) -> None:
         train_ds.set_offset(int(offset.item()))
         epoch = global_step // max(1, len(train_loader)) + 1
         train_sampler.set_epoch(epoch)
-        log_if_main(f"[train] epoch {epoch:02d} with offset {offset.item()} starting ...")
+        log_if_main(
+            f"[train] epoch {epoch:02d} with offset {offset.item()} starting ..."
+        )
 
         for it, chunk in enumerate(train_loader):
             last_micro = ((it + 1) % cfg.grad_accum_steps) == 0
@@ -1183,9 +1214,7 @@ def parse_args() -> Config:
     p.add_argument(
         "--resume_path", type=str, default=None, help="Path to a checkpoint to resume."
     )
-    p.add_argument(
-        "--run_id", type=str, default=None, help="Wandb run ID to resume."
-    )
+    p.add_argument("--run_id", type=str, default=None, help="Wandb run ID to resume.")
     p.add_argument(
         "--amp_dtype",
         type=str,

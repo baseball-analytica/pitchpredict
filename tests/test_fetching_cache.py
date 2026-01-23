@@ -19,7 +19,9 @@ import pitchpredict.backend.fetching as fetching
 
 
 @pytest.mark.asyncio
-async def test_get_pitches_from_pitcher_appends_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_get_pitches_from_pitcher_appends_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     cache = PitchPredictCache(cache_dir=str(tmp_path))
     cached = pd.DataFrame(
         [
@@ -31,7 +33,9 @@ async def test_get_pitches_from_pitcher_appends_cache(monkeypatch: pytest.Monkey
 
     calls: list[tuple[str, str, int]] = []
 
-    def fake_statcast_pitcher(start_dt: str, end_dt: str, player_id: int) -> pd.DataFrame:
+    def fake_statcast_pitcher(
+        start_dt: str, end_dt: str, player_id: int
+    ) -> pd.DataFrame:
         calls.append((start_dt, end_dt, player_id))
         return pd.DataFrame(
             [
@@ -56,7 +60,9 @@ async def test_get_pitches_from_pitcher_appends_cache(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
-async def test_get_pitches_to_batter_appends_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_get_pitches_to_batter_appends_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     cache = PitchPredictCache(cache_dir=str(tmp_path))
     cached = pd.DataFrame(
         [
@@ -68,7 +74,9 @@ async def test_get_pitches_to_batter_appends_cache(monkeypatch: pytest.MonkeyPat
 
     calls: list[tuple[str, str, int]] = []
 
-    def fake_statcast_batter(start_dt: str, end_dt: str, player_id: int) -> pd.DataFrame:
+    def fake_statcast_batter(
+        start_dt: str, end_dt: str, player_id: int
+    ) -> pd.DataFrame:
         calls.append((start_dt, end_dt, player_id))
         return pd.DataFrame(
             [
@@ -93,14 +101,23 @@ async def test_get_pitches_to_batter_appends_cache(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_get_all_batted_balls_prepends_fetch_when_before_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_get_all_batted_balls_prepends_fetch_when_before_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     cache = PitchPredictCache(cache_dir=str(tmp_path))
     cached = pd.DataFrame(
         [
-            {"game_date": "2024-06-05", "type": "X", "launch_speed": 100.0, "launch_angle": 21.0},
+            {
+                "game_date": "2024-06-05",
+                "type": "X",
+                "launch_speed": 100.0,
+                "launch_angle": 21.0,
+            },
         ]
     )
-    cache.set_batted_balls(start_date="2024-06-05", end_date="2024-06-20", batted_balls=cached)
+    cache.set_batted_balls(
+        start_date="2024-06-05", end_date="2024-06-20", batted_balls=cached
+    )
 
     calls: list[tuple[str, str]] = []
 
@@ -108,8 +125,18 @@ async def test_get_all_batted_balls_prepends_fetch_when_before_cache(monkeypatch
         calls.append((start_dt, end_dt))
         return pd.DataFrame(
             [
-                {"game_date": "2024-05-25", "type": "X", "launch_speed": 97.0, "launch_angle": 18.0},
-                {"game_date": "2024-06-05", "type": "X", "launch_speed": 100.0, "launch_angle": 21.0},
+                {
+                    "game_date": "2024-05-25",
+                    "type": "X",
+                    "launch_speed": 97.0,
+                    "launch_angle": 18.0,
+                },
+                {
+                    "game_date": "2024-06-05",
+                    "type": "X",
+                    "launch_speed": 100.0,
+                    "launch_angle": 21.0,
+                },
             ]
         )
 
@@ -131,14 +158,23 @@ async def test_get_all_batted_balls_prepends_fetch_when_before_cache(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_get_all_batted_balls_appends_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_get_all_batted_balls_appends_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     cache = PitchPredictCache(cache_dir=str(tmp_path))
     cached = pd.DataFrame(
         [
-            {"game_date": "2024-06-01", "type": "X", "launch_speed": 98.0, "launch_angle": 20.0},
+            {
+                "game_date": "2024-06-01",
+                "type": "X",
+                "launch_speed": 98.0,
+                "launch_angle": 20.0,
+            },
         ]
     )
-    cache.set_batted_balls(start_date="2024-01-01", end_date="2024-06-01", batted_balls=cached)
+    cache.set_batted_balls(
+        start_date="2024-01-01", end_date="2024-06-01", batted_balls=cached
+    )
 
     calls: list[tuple[str, str]] = []
 
@@ -146,8 +182,18 @@ async def test_get_all_batted_balls_appends_cache(monkeypatch: pytest.MonkeyPatc
         calls.append((start_dt, end_dt))
         return pd.DataFrame(
             [
-                {"game_date": "2024-06-05", "type": "X", "launch_speed": 102.0, "launch_angle": 25.0},
-                {"game_date": "2024-06-05", "type": "B", "launch_speed": 90.0, "launch_angle": 10.0},
+                {
+                    "game_date": "2024-06-05",
+                    "type": "X",
+                    "launch_speed": 102.0,
+                    "launch_angle": 25.0,
+                },
+                {
+                    "game_date": "2024-06-05",
+                    "type": "B",
+                    "launch_speed": 90.0,
+                    "launch_angle": 10.0,
+                },
             ]
         )
 
@@ -169,7 +215,9 @@ async def test_get_all_batted_balls_appends_cache(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_get_player_records_from_name_uses_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_get_player_records_from_name_uses_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     cache = PitchPredictCache(cache_dir=str(tmp_path))
     records = [
         {
@@ -179,7 +227,9 @@ async def test_get_player_records_from_name_uses_cache(monkeypatch: pytest.Monke
             "key_mlbam": 592450,
         }
     ]
-    cache.set_player_records(player_name="Aaron Judge", fuzzy_lookup=True, records=records)
+    cache.set_player_records(
+        player_name="Aaron Judge", fuzzy_lookup=True, records=records
+    )
 
     def fail_lookup(*args: object, **kwargs: object) -> pd.DataFrame:
         raise AssertionError("playerid_lookup should not be called when cached")
@@ -197,7 +247,9 @@ async def test_get_player_records_from_name_uses_cache(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_get_player_record_from_id_uses_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_get_player_record_from_id_uses_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     cache = PitchPredictCache(cache_dir=str(tmp_path))
     record = {
         "name_first": "Aaron",
@@ -210,7 +262,9 @@ async def test_get_player_record_from_id_uses_cache(monkeypatch: pytest.MonkeyPa
     def fail_reverse_lookup(*args: object, **kwargs: object) -> pd.DataFrame:
         raise AssertionError("playerid_reverse_lookup should not be called when cached")
 
-    monkeypatch.setattr(fetching.pybaseball, "playerid_reverse_lookup", fail_reverse_lookup)
+    monkeypatch.setattr(
+        fetching.pybaseball, "playerid_reverse_lookup", fail_reverse_lookup
+    )
 
     result = await get_player_record_from_id(
         mlbam_id=592450,

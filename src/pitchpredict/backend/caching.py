@@ -45,7 +45,13 @@ class PitchPredictCache:
         """
         self.logger.debug("running post-initialization tasks for cache")
 
-        for path in (self.cache_dir, self._pitcher_dir, self._batter_dir, self._batted_ball_dir, self._player_dir):
+        for path in (
+            self.cache_dir,
+            self._pitcher_dir,
+            self._batter_dir,
+            self._batted_ball_dir,
+            self._player_dir,
+        ):
             if not path.exists():
                 path.mkdir(parents=True, exist_ok=True)
                 self.logger.info("created cache directory at %s", path)
@@ -90,7 +96,9 @@ class PitchPredictCache:
         pitches["game_date_dt"] = pd.to_datetime(pitches["game_date"], errors="coerce")
         return pitches
 
-    def _filter_pitches_by_date(self, pitches: pd.DataFrame, end_date: str) -> pd.DataFrame:
+    def _filter_pitches_by_date(
+        self, pitches: pd.DataFrame, end_date: str
+    ) -> pd.DataFrame:
         """Filter pitches with game_date_dt <= end_date."""
         if "game_date_dt" not in pitches.columns:
             pitches = self._ensure_game_date_dt(pitches)
@@ -100,7 +108,9 @@ class PitchPredictCache:
         mask = pitches["game_date_dt"] <= end_ts
         return pitches.loc[mask].copy(deep=False)
 
-    def _filter_pitches_by_range(self, pitches: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
+    def _filter_pitches_by_range(
+        self, pitches: pd.DataFrame, start_date: str, end_date: str
+    ) -> pd.DataFrame:
         """Filter pitches with start_date <= game_date_dt <= end_date."""
         if "game_date_dt" not in pitches.columns:
             pitches = self._ensure_game_date_dt(pitches)
@@ -108,7 +118,9 @@ class PitchPredictCache:
             return pitches.copy(deep=False)
         start_ts = pd.Timestamp(start_date)
         end_ts = pd.Timestamp(end_date)
-        mask = (pitches["game_date_dt"] >= start_ts) & (pitches["game_date_dt"] <= end_ts)
+        mask = (pitches["game_date_dt"] >= start_ts) & (
+            pitches["game_date_dt"] <= end_ts
+        )
         return pitches.loc[mask].copy(deep=False)
 
     def _read_dataframe(self, path: Path) -> pd.DataFrame | None:
@@ -177,12 +189,19 @@ class PitchPredictCache:
         try:
             tmp_path = path.parent / f"{path.name}.tmp"
             with tmp_path.open("w", encoding="utf-8") as handle:
-                json.dump({"start_date": start_date, "end_date": end_date}, handle, indent=2, sort_keys=True)
+                json.dump(
+                    {"start_date": start_date, "end_date": end_date},
+                    handle,
+                    indent=2,
+                    sort_keys=True,
+                )
             os.replace(tmp_path, path)
         except Exception as exc:
             self.logger.warning(f"failed to write cache metadata {path}: {exc}")
 
-    def get_pitcher_pitches(self, pitcher_id: int, end_date: str | None) -> pd.DataFrame | None:
+    def get_pitcher_pitches(
+        self, pitcher_id: int, end_date: str | None
+    ) -> pd.DataFrame | None:
         """Return cached pitcher pitches if coverage includes end_date."""
         normalized_end_date = self._normalize_end_date(end_date)
         path = self._pitcher_path(pitcher_id)
@@ -201,12 +220,18 @@ class PitchPredictCache:
         data = self._ensure_game_date_dt(data)
         if "game_date_dt" in data.columns:
             max_date = data["game_date_dt"].max()
-            if pd.notna(max_date) and pd.Timestamp(normalized_end_date) <= pd.Timestamp(max_date).normalize():
+            if (
+                pd.notna(max_date)
+                and pd.Timestamp(normalized_end_date)
+                <= pd.Timestamp(max_date).normalize()
+            ):
                 self.logger.debug(f"cache hit for pitcher {pitcher_id} at {path}")
                 return self._filter_pitches_by_date(data, normalized_end_date)
         return None
 
-    def get_pitcher_cache_state(self, pitcher_id: int) -> tuple[pd.DataFrame, str] | None:
+    def get_pitcher_cache_state(
+        self, pitcher_id: int
+    ) -> tuple[pd.DataFrame, str] | None:
         """Return cached pitcher data with its coverage end date."""
         path = self._pitcher_path(pitcher_id)
         data = self._read_dataframe(path)
@@ -224,19 +249,26 @@ class PitchPredictCache:
             cached_end_date = pd.Timestamp(max_date).normalize()
         return data, cached_end_date.strftime("%Y-%m-%d")
 
-    def set_pitcher_pitches(self, pitcher_id: int, end_date: str | None, pitches: pd.DataFrame) -> None:
+    def set_pitcher_pitches(
+        self, pitcher_id: int, end_date: str | None, pitches: pd.DataFrame
+    ) -> None:
         """Persist pitcher pitches if they extend current coverage."""
         normalized_end_date = self._normalize_end_date(end_date)
         meta_path = self._pitcher_meta_path(pitcher_id)
         cached_end_date = self._read_end_date_meta(meta_path)
-        if cached_end_date is not None and pd.Timestamp(normalized_end_date) <= cached_end_date:
+        if (
+            cached_end_date is not None
+            and pd.Timestamp(normalized_end_date) <= cached_end_date
+        ):
             return
         path = self._pitcher_path(pitcher_id)
         self._write_dataframe(path, pitches)
         self._write_end_date_meta(meta_path, normalized_end_date)
         self.logger.debug(f"cached pitcher pitches at {path}")
 
-    def get_batter_pitches(self, batter_id: int, end_date: str | None) -> pd.DataFrame | None:
+    def get_batter_pitches(
+        self, batter_id: int, end_date: str | None
+    ) -> pd.DataFrame | None:
         """Return cached batter pitches if coverage includes end_date."""
         normalized_end_date = self._normalize_end_date(end_date)
         path = self._batter_path(batter_id)
@@ -255,7 +287,11 @@ class PitchPredictCache:
         data = self._ensure_game_date_dt(data)
         if "game_date_dt" in data.columns:
             max_date = data["game_date_dt"].max()
-            if pd.notna(max_date) and pd.Timestamp(normalized_end_date) <= pd.Timestamp(max_date).normalize():
+            if (
+                pd.notna(max_date)
+                and pd.Timestamp(normalized_end_date)
+                <= pd.Timestamp(max_date).normalize()
+            ):
                 self.logger.debug(f"cache hit for batter {batter_id} at {path}")
                 return self._filter_pitches_by_date(data, normalized_end_date)
         return None
@@ -278,12 +314,17 @@ class PitchPredictCache:
             cached_end_date = pd.Timestamp(max_date).normalize()
         return data, cached_end_date.strftime("%Y-%m-%d")
 
-    def set_batter_pitches(self, batter_id: int, end_date: str | None, pitches: pd.DataFrame) -> None:
+    def set_batter_pitches(
+        self, batter_id: int, end_date: str | None, pitches: pd.DataFrame
+    ) -> None:
         """Persist batter pitches if they extend current coverage."""
         normalized_end_date = self._normalize_end_date(end_date)
         meta_path = self._batter_meta_path(batter_id)
         cached_end_date = self._read_end_date_meta(meta_path)
-        if cached_end_date is not None and pd.Timestamp(normalized_end_date) <= cached_end_date:
+        if (
+            cached_end_date is not None
+            and pd.Timestamp(normalized_end_date) <= cached_end_date
+        ):
             return
         path = self._batter_path(batter_id)
         self._write_dataframe(path, pitches)
@@ -296,7 +337,9 @@ class PitchPredictCache:
             start_ts = pd.Timestamp(start_date)
             end_ts = pd.Timestamp(end_date)
         except (TypeError, ValueError):
-            self.logger.warning(f"invalid date range for batted balls cache: {start_date} - {end_date}")
+            self.logger.warning(
+                f"invalid date range for batted balls cache: {start_date} - {end_date}"
+            )
             return None
 
         cached_range = self._read_range_meta(self._batted_ball_meta_path)
@@ -305,7 +348,9 @@ class PitchPredictCache:
             if start_ts >= cached_start and end_ts <= cached_end:
                 data = self._read_dataframe(self._batted_ball_path)
                 if data is not None:
-                    self.logger.debug(f"cache hit for batted balls at {self._batted_ball_path}")
+                    self.logger.debug(
+                        f"cache hit for batted balls at {self._batted_ball_path}"
+                    )
                     return self._filter_pitches_by_range(data, start_date, end_date)
                 return None
 
@@ -319,17 +364,23 @@ class PitchPredictCache:
         cached_end = data["game_date_dt"].max()
         if pd.notna(cached_start) and pd.notna(cached_end):
             if start_ts >= cached_start and end_ts <= cached_end:
-                self.logger.debug(f"cache hit for batted balls at {self._batted_ball_path}")
+                self.logger.debug(
+                    f"cache hit for batted balls at {self._batted_ball_path}"
+                )
                 return self._filter_pitches_by_range(data, start_date, end_date)
         return None
 
-    def set_batted_balls(self, start_date: str, end_date: str, batted_balls: pd.DataFrame) -> None:
+    def set_batted_balls(
+        self, start_date: str, end_date: str, batted_balls: pd.DataFrame
+    ) -> None:
         """Persist batted balls if they extend the cached range."""
         try:
             start_ts = pd.Timestamp(start_date)
             end_ts = pd.Timestamp(end_date)
         except (TypeError, ValueError):
-            self.logger.warning(f"invalid date range for batted balls cache: {start_date} - {end_date}")
+            self.logger.warning(
+                f"invalid date range for batted balls cache: {start_date} - {end_date}"
+            )
             return
 
         cached_range = self._read_range_meta(self._batted_ball_meta_path)
@@ -371,7 +422,9 @@ class PitchPredictCache:
             with self._player_index_path.open("r", encoding="utf-8") as handle:
                 data = json.load(handle)
             if isinstance(data, dict):
-                self._player_index = {str(key): int(value) for key, value in data.items()}
+                self._player_index = {
+                    str(key): int(value) for key, value in data.items()
+                }
             else:
                 self._player_index = {}
         except Exception as exc:
@@ -381,7 +434,9 @@ class PitchPredictCache:
 
     def _write_player_index(self, data: dict[str, int]) -> None:
         """Persist the player name -> ID map atomically."""
-        tmp_path = self._player_index_path.parent / f"{self._player_index_path.name}.tmp"
+        tmp_path = (
+            self._player_index_path.parent / f"{self._player_index_path.name}.tmp"
+        )
         with tmp_path.open("w", encoding="utf-8") as handle:
             json.dump(data, handle, indent=2, sort_keys=True)
         os.replace(tmp_path, self._player_index_path)
@@ -399,7 +454,9 @@ class PitchPredictCache:
                 cleaned: dict[str, list[dict[str, object]]] = {}
                 for key, value in data.items():
                     if isinstance(value, list):
-                        cleaned[key] = [record for record in value if isinstance(record, dict)]
+                        cleaned[key] = [
+                            record for record in value if isinstance(record, dict)
+                        ]
                 self._player_records_index = cleaned
             else:
                 self._player_records_index = {}
@@ -408,8 +465,12 @@ class PitchPredictCache:
             self._player_records_index = {}
         return self._player_records_index
 
-    def _write_player_records_index(self, data: dict[str, list[dict[str, object]]]) -> None:
-        tmp_path = self._player_records_path.parent / f"{self._player_records_path.name}.tmp"
+    def _write_player_records_index(
+        self, data: dict[str, list[dict[str, object]]]
+    ) -> None:
+        tmp_path = (
+            self._player_records_path.parent / f"{self._player_records_path.name}.tmp"
+        )
         with tmp_path.open("w", encoding="utf-8") as handle:
             json.dump(data, handle, indent=2, sort_keys=True)
         os.replace(tmp_path, self._player_records_path)
@@ -425,7 +486,9 @@ class PitchPredictCache:
                 data = json.load(handle)
             if isinstance(data, dict):
                 cleaned = {
-                    str(key): value for key, value in data.items() if isinstance(value, dict)
+                    str(key): value
+                    for key, value in data.items()
+                    if isinstance(value, dict)
                 }
                 self._player_id_records = cleaned
             else:
@@ -436,7 +499,10 @@ class PitchPredictCache:
         return self._player_id_records
 
     def _write_player_id_records(self, data: dict[str, dict[str, object]]) -> None:
-        tmp_path = self._player_id_records_path.parent / f"{self._player_id_records_path.name}.tmp"
+        tmp_path = (
+            self._player_id_records_path.parent
+            / f"{self._player_id_records_path.name}.tmp"
+        )
         with tmp_path.open("w", encoding="utf-8") as handle:
             json.dump(data, handle, indent=2, sort_keys=True)
         os.replace(tmp_path, self._player_id_records_path)
@@ -446,7 +512,7 @@ class PitchPredictCache:
             value = record.get(key)
             if value is not None:
                 try:
-                    return int(value) # type: ignore
+                    return int(value)  # type: ignore
                 except (TypeError, ValueError):
                     return None
         return None
@@ -464,7 +530,9 @@ class PitchPredictCache:
             self.logger.debug(f"cache hit for player {player_name}")
         return player_id
 
-    def set_player_id(self, player_name: str, player_id: int, fuzzy_lookup: bool = True) -> None:
+    def set_player_id(
+        self, player_name: str, player_id: int, fuzzy_lookup: bool = True
+    ) -> None:
         """Store a player ID for future lookups."""
         key = self._normalize_player_key(player_name, fuzzy_lookup)
         data = self._load_player_index()
@@ -473,7 +541,9 @@ class PitchPredictCache:
         self._player_index = data
         self.logger.debug(f"cached player id for {player_name}")
 
-    def get_player_records(self, player_name: str, fuzzy_lookup: bool = True) -> list[dict[str, object]] | None:
+    def get_player_records(
+        self, player_name: str, fuzzy_lookup: bool = True
+    ) -> list[dict[str, object]] | None:
         """Lookup cached player record list by name."""
         key = self._normalize_player_key(player_name, fuzzy_lookup)
         data = self._load_player_records_index()
@@ -498,7 +568,11 @@ class PitchPredictCache:
         if records:
             mlbam_id = self._extract_mlbam_id(records[0])
             if mlbam_id is not None:
-                self.set_player_id(player_name=player_name, player_id=mlbam_id, fuzzy_lookup=fuzzy_lookup)
+                self.set_player_id(
+                    player_name=player_name,
+                    player_id=mlbam_id,
+                    fuzzy_lookup=fuzzy_lookup,
+                )
 
         id_records = self._load_player_id_records()
         for record in records:

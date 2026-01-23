@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+
 def collate_batch(
     pad_id: int,
     batch: list[tuple[torch.Tensor, torch.Tensor]],
@@ -29,7 +30,7 @@ def collate_batch(
     """
     seqs, labels = zip(*batch)
     lengths = torch.tensor([len(seq) for seq in seqs], dtype=torch.long)
-    
+
     # sort by length descending for pack_padded_sequence
     lengths_sorted, perm_idx = torch.sort(lengths, descending=True)
     perm_idx_list = perm_idx.tolist()
@@ -142,17 +143,31 @@ def train_model(
     """
     logger.debug("train_model called")
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, collate_fn=lambda batch: collate_batch(pad_id, batch))
-    val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False, collate_fn=lambda batch: collate_batch(pad_id, batch))
+    train_loader = torch.utils.data.DataLoader(
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=lambda batch: collate_batch(pad_id, batch),
+    )
+    val_loader = torch.utils.data.DataLoader(
+        val_data,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=lambda batch: collate_batch(pad_id, batch),
+    )
 
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     best_val = math.inf
     for epoch in range(1, num_epochs + 1):
-        train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, criterion, device)
+        train_loss, train_acc = train_one_epoch(
+            model, train_loader, optimizer, criterion, device
+        )
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
-        logger.info(f"epoch {epoch:02d} | train loss {train_loss:.4f} | train acc {train_acc:.3f} | val loss {val_loss:.4f} | val acc {val_acc:.3f}")
+        logger.info(
+            f"epoch {epoch:02d} | train loss {train_loss:.4f} | train acc {train_acc:.3f} | val loss {val_loss:.4f} | val acc {val_acc:.3f}"
+        )
 
         # save the best
         if val_loss < best_val:

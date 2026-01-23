@@ -75,7 +75,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    logging.basicConfig(level=getattr(logging, args.log_level.upper()), format="%(levelname)s: %(message)s")
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format="%(levelname)s: %(message)s",
+    )
 
     split_saved_dataset(
         tokens_path=args.tokens_path,
@@ -89,4 +92,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

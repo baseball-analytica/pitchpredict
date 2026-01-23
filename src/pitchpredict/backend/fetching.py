@@ -6,14 +6,16 @@ import logging
 
 from fastapi import HTTPException
 import pandas as pd
-import pybaseball # type: ignore
+import pybaseball  # type: ignore
 
 from pitchpredict.backend.caching import PitchPredictCache
 
 logger = logging.getLogger("pitchpredict.backend.fetching")
 
 
-def _filter_pitches_by_range(pitches: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
+def _filter_pitches_by_range(
+    pitches: pd.DataFrame, start_date: str, end_date: str
+) -> pd.DataFrame:
     """Return a view of pitches within the requested date range."""
     if "game_date" not in pitches.columns:
         return pitches.copy(deep=False)
@@ -83,9 +85,15 @@ async def get_pitches_from_pitcher(
                 requested_start_ts = pd.Timestamp(start_date)
             except (TypeError, ValueError):
                 cached_end_ts = None
-            if cached_end_ts is not None and requested_end_ts > cached_end_ts and requested_start_ts <= cached_end_ts:
+            if (
+                cached_end_ts is not None
+                and requested_end_ts > cached_end_ts
+                and requested_start_ts <= cached_end_ts
+            ):
                 # Fetch only the missing tail of data and append to cache.
-                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime(
+                    "%Y-%m-%d"
+                )
                 try:
                     logger.debug("fetching pitches from pitcher for cache append")
                     new_pitches = pybaseball.statcast_pitcher(
@@ -98,11 +106,18 @@ async def get_pitches_from_pitcher(
                     raise HTTPException(status_code=500, detail=str(exc))
 
                 if new_pitches.empty:
-                    logger.debug("no new pitches found for pitcher %s between %s and %s", pitcher_id, fetch_start, end_date)
+                    logger.debug(
+                        "no new pitches found for pitcher %s between %s and %s",
+                        pitcher_id,
+                        fetch_start,
+                        end_date,
+                    )
                     combined = cached_data
                 else:
                     combined = pd.concat([cached_data, new_pitches], ignore_index=True)
-                cache.set_pitcher_pitches(pitcher_id=pitcher_id, end_date=end_date, pitches=combined)
+                cache.set_pitcher_pitches(
+                    pitcher_id=pitcher_id, end_date=end_date, pitches=combined
+                )
                 return _filter_pitches_by_range(combined, start_date, end_date)
 
     try:
@@ -114,12 +129,19 @@ async def get_pitches_from_pitcher(
         )
 
         if pitches.empty:
-            logger.error(f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}")
+            logger.error(
+                f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}"
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}",
+            )
 
         logger.debug("pitches fetched successfully")
         if cache is not None:
-            cache.set_pitcher_pitches(pitcher_id=pitcher_id, end_date=end_date, pitches=pitches)
+            cache.set_pitcher_pitches(
+                pitcher_id=pitcher_id, end_date=end_date, pitches=pitches
+            )
         return pitches
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -158,9 +180,15 @@ async def get_pitches_to_batter(
                 requested_start_ts = pd.Timestamp(start_date)
             except (TypeError, ValueError):
                 cached_end_ts = None
-            if cached_end_ts is not None and requested_end_ts > cached_end_ts and requested_start_ts <= cached_end_ts:
+            if (
+                cached_end_ts is not None
+                and requested_end_ts > cached_end_ts
+                and requested_start_ts <= cached_end_ts
+            ):
                 # Fetch only the missing tail of data and append to cache.
-                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime(
+                    "%Y-%m-%d"
+                )
                 try:
                     logger.debug("fetching pitches to batter for cache append")
                     new_pitches = pybaseball.statcast_batter(
@@ -173,11 +201,15 @@ async def get_pitches_to_batter(
                     raise HTTPException(status_code=500, detail=str(exc))
 
                 if new_pitches.empty:
-                    logger.debug(f"no new pitches found for batter {batter_id} between {fetch_start} and {end_date}")
+                    logger.debug(
+                        f"no new pitches found for batter {batter_id} between {fetch_start} and {end_date}"
+                    )
                     combined = cached_data
                 else:
                     combined = pd.concat([cached_data, new_pitches], ignore_index=True)
-                cache.set_batter_pitches(batter_id=batter_id, end_date=end_date, pitches=combined)
+                cache.set_batter_pitches(
+                    batter_id=batter_id, end_date=end_date, pitches=combined
+                )
                 return _filter_pitches_by_range(combined, start_date, end_date)
 
     try:
@@ -189,12 +221,19 @@ async def get_pitches_to_batter(
         )
 
         if pitches.empty:
-            logger.error(f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}")
+            logger.error(
+                f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}"
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}",
+            )
 
         logger.debug("pitches fetched successfully")
         if cache is not None:
-            cache.set_batter_pitches(batter_id=batter_id, end_date=end_date, pitches=pitches)
+            cache.set_batter_pitches(
+                batter_id=batter_id, end_date=end_date, pitches=pitches
+            )
         return pitches
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -218,23 +257,27 @@ async def get_player_id_from_name(
         last_name, first_name = _parse_player_name(player_name)
         logger.debug(f"parsed player name: {last_name}, {first_name}")
         if cache is not None:
-            cached = cache.get_player_id(player_name=player_name, fuzzy_lookup=fuzzy_lookup)
+            cached = cache.get_player_id(
+                player_name=player_name, fuzzy_lookup=fuzzy_lookup
+            )
             if cached is not None:
                 return cached
         player_ids = pybaseball.playerid_lookup(
-            last_name,
-            first_name,
-            fuzzy=fuzzy_lookup
+            last_name, first_name, fuzzy=fuzzy_lookup
         )
 
         if player_ids.empty:
             logger.error(f"no player found with name {player_name}")
-            raise HTTPException(status_code=404, detail=f"no player found with name {player_name}")
+            raise HTTPException(
+                status_code=404, detail=f"no player found with name {player_name}"
+            )
 
         player_id = int(player_ids.iloc[0]["key_mlbam"])
         logger.info(f"player ID fetched successfully for {player_name}: {player_id}")
         if cache is not None:
-            cache.set_player_id(player_name=player_name, player_id=player_id, fuzzy_lookup=fuzzy_lookup)
+            cache.set_player_id(
+                player_name=player_name, player_id=player_id, fuzzy_lookup=fuzzy_lookup
+            )
         return player_id
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -262,23 +305,27 @@ async def get_player_records_from_name(
         last_name, first_name = _parse_player_name(player_name)
         logger.debug(f"parsed player name: {last_name}, {first_name}")
         if cache is not None:
-            cached = cache.get_player_records(player_name=player_name, fuzzy_lookup=fuzzy_lookup)
+            cached = cache.get_player_records(
+                player_name=player_name, fuzzy_lookup=fuzzy_lookup
+            )
             if cached is not None:
                 return cached[:limit]
 
         player_ids = pybaseball.playerid_lookup(
-            last_name,
-            first_name,
-            fuzzy=fuzzy_lookup
+            last_name, first_name, fuzzy=fuzzy_lookup
         )
 
         if player_ids.empty:
             logger.error(f"no player found with name {player_name}")
-            raise HTTPException(status_code=404, detail=f"no player found with name {player_name}")
+            raise HTTPException(
+                status_code=404, detail=f"no player found with name {player_name}"
+            )
 
         records = _records_from_player_df(player_ids)
         if cache is not None:
-            cache.set_player_records(player_name=player_name, fuzzy_lookup=fuzzy_lookup, records=records)
+            cache.set_player_records(
+                player_name=player_name, fuzzy_lookup=fuzzy_lookup, records=records
+            )
         return records[:limit]
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -304,12 +351,17 @@ async def get_player_record_from_id(
 
     try:
         if not hasattr(pybaseball, "playerid_reverse_lookup"):
-            raise HTTPException(status_code=500, detail="pybaseball.playerid_reverse_lookup is unavailable")
+            raise HTTPException(
+                status_code=500,
+                detail="pybaseball.playerid_reverse_lookup is unavailable",
+            )
 
         player_ids = pybaseball.playerid_reverse_lookup([mlbam_id])
         if player_ids.empty:
             logger.error(f"no player found with id {mlbam_id}")
-            raise HTTPException(status_code=404, detail=f"no player found with id {mlbam_id}")
+            raise HTTPException(
+                status_code=404, detail=f"no player found with id {mlbam_id}"
+            )
 
         record = _records_from_player_df(player_ids)[0]
         if cache is not None:
@@ -333,20 +385,26 @@ def _parse_player_name(name: str) -> tuple[str, str]:
     cleaned = " ".join(name.strip().split())
     if not cleaned:
         logger.error("player name is empty")
-        raise HTTPException(status_code=400, detail="player name must include first and last name")
+        raise HTTPException(
+            status_code=400, detail="player name must include first and last name"
+        )
 
     if "," in cleaned:
         last_name, first_name = [part.strip() for part in cleaned.split(",", 1)]
         if not last_name or not first_name:
             logger.error(f"player name must include first and last name: {name}")
-            raise HTTPException(status_code=400, detail="player name must include first and last name")
+            raise HTTPException(
+                status_code=400, detail="player name must include first and last name"
+            )
         logger.debug(f"parsed player name: {last_name}, {first_name}")
         return last_name, first_name
 
     name_split = cleaned.split(" ")
     if len(name_split) < 2:
         logger.error(f"player name must include first and last name: {name}")
-        raise HTTPException(status_code=400, detail="player name must include first and last name")
+        raise HTTPException(
+            status_code=400, detail="player name must include first and last name"
+        )
 
     first_name = name_split[0]
     last_name = " ".join(name_split[1:])
@@ -372,7 +430,10 @@ async def get_all_pitches(
 
         if pitches.empty:
             logger.error(f"no pitches found between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no pitches found between {start_date} and {end_date}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"no pitches found between {start_date} and {end_date}",
+            )
 
         logger.debug("pitches fetched successfully")
         return pitches
@@ -433,7 +494,9 @@ async def get_all_batted_balls(
                 and requested_end_ts > cached_end_ts
             ):
                 # Extend cached range by fetching only missing data.
-                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime(
+                    "%Y-%m-%d"
+                )
                 try:
                     logger.debug("fetching batted balls for cache append")
                     pitches = pybaseball.statcast(
@@ -445,13 +508,17 @@ async def get_all_batted_balls(
                     raise HTTPException(status_code=500, detail=str(exc))
 
                 if pitches.empty:
-                    logger.debug("no new batted balls found between %s and %s", fetch_start, end_date)
+                    logger.debug(
+                        "no new batted balls found between %s and %s",
+                        fetch_start,
+                        end_date,
+                    )
                     combined = cached_data
                 else:
                     batted_balls = pitches[
-                        (pitches["type"] == "X") &
-                        (pitches["launch_speed"].notna()) &
-                        (pitches["launch_angle"].notna())
+                        (pitches["type"] == "X")
+                        & (pitches["launch_speed"].notna())
+                        & (pitches["launch_angle"].notna())
                     ].copy()
                     combined = pd.concat([cached_data, batted_balls], ignore_index=True)
                 cache.set_batted_balls(
@@ -470,22 +537,32 @@ async def get_all_batted_balls(
 
         if pitches.empty:
             logger.error(f"no data found between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no data found between {start_date} and {end_date}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"no data found between {start_date} and {end_date}",
+            )
 
         # Filter to only batted ball events (contact events with launch_speed and launch_angle)
         batted_balls = pitches[
-            (pitches["type"] == "X") &
-            (pitches["launch_speed"].notna()) &
-            (pitches["launch_angle"].notna())
+            (pitches["type"] == "X")
+            & (pitches["launch_speed"].notna())
+            & (pitches["launch_angle"].notna())
         ].copy()
 
         if batted_balls.empty:
-            logger.error(f"no batted ball events found between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no batted ball events found between {start_date} and {end_date}")
+            logger.error(
+                f"no batted ball events found between {start_date} and {end_date}"
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"no batted ball events found between {start_date} and {end_date}",
+            )
 
         logger.debug(f"fetched {batted_balls.shape[0]} batted ball events successfully")
         if cache is not None:
-            cache.set_batted_balls(start_date=start_date, end_date=end_date, batted_balls=batted_balls)
+            cache.set_batted_balls(
+                start_date=start_date, end_date=end_date, batted_balls=batted_balls
+            )
         return batted_balls
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")

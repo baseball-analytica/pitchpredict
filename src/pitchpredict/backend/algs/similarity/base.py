@@ -10,9 +10,15 @@ import pandas as pd
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
 from pitchpredict.backend.caching import PitchPredictCache
-from pitchpredict.backend.fetching import get_pitches_from_pitcher, get_pitches_to_batter, get_player_id_from_name, get_all_batted_balls
+from pitchpredict.backend.fetching import (
+    get_pitches_from_pitcher,
+    get_pitches_to_batter,
+    get_player_id_from_name,
+    get_all_batted_balls,
+)
 import pitchpredict.types.api as api_types
 import pitchpredict.backend.algs.similarity.types as similarity_types
+
 
 class SimilarityAlgorithm(PitchPredictAlgorithm):
     """
@@ -49,7 +55,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         pitches["game_date_dt"] = pd.to_datetime(pitches["game_date"], errors="coerce")
         return pitches
 
-    def _filter_pitches_by_date(self, pitches: pd.DataFrame, end_date: pd.Timestamp) -> pd.DataFrame:
+    def _filter_pitches_by_date(
+        self, pitches: pd.DataFrame, end_date: pd.Timestamp
+    ) -> pd.DataFrame:
         if "game_date_dt" not in pitches.columns:
             return pitches.copy(deep=False)
         mask = pitches["game_date_dt"] <= end_date
@@ -103,7 +111,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 except (TypeError, ValueError):
                     self.logger.warning("invalid sample_pctg in request; using default")
 
-            effective_sample_size = request.sample_size if request.sample_size is not None else sample_size
+            effective_sample_size = (
+                request.sample_size if request.sample_size is not None else sample_size
+            )
             weights = similarity_types.SimilarityWeights().softmax()
 
             pitches = await self._get_cached_pitches_for_pitcher(
@@ -118,9 +128,13 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 weights=weights,
                 sample_pctg=sample_pctg,
             )
-            self.logger.debug(f"successfully fetched {similar_pitches.shape[0]} similar pitches")
+            self.logger.debug(
+                f"successfully fetched {similar_pitches.shape[0]} similar pitches"
+            )
 
-            basic_pitch_data, detailed_pitch_data = await self._digest_pitch_data(similar_pitches)
+            basic_pitch_data, detailed_pitch_data = await self._digest_pitch_data(
+                similar_pitches
+            )
             self.logger.debug("successfully digested pitch data")
 
             basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(
@@ -128,7 +142,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             )
             self.logger.debug("successfully digested outcome data")
 
-            sampled_pitches = self._sample_pitches(pitches=similar_pitches, n=effective_sample_size)
+            sampled_pitches = self._sample_pitches(
+                pitches=similar_pitches, n=effective_sample_size
+            )
             self.logger.debug(f"successfully sampled {len(sampled_pitches)} pitches")
 
             prediction_metadata = self.get_pitcher_prediction_metadata(
@@ -206,13 +222,15 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 pitch_z=pitch_z,
                 sample_pctg=sample_pctg,
             )
-            self.logger.debug(f"successfully fetched {similar_pitches.shape[0]} similar pitches")
+            self.logger.debug(
+                f"successfully fetched {similar_pitches.shape[0]} similar pitches"
+            )
 
             basic_outcome_data, detailed_outcome_data = await self._digest_outcome_data(
                 pitches=similar_pitches,
             )
             self.logger.debug("successfully digested outcome data")
-            
+
             prediction_metadata = self.get_batter_prediction_metadata(
                 start_time=start_time,
                 end_time=datetime.now(),
@@ -263,7 +281,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             def score_equal(series: pd.Series, target: Any) -> pd.Series:
                 return series.eq(target).astype(float).fillna(0.0)
 
-            def score_numeric(series: pd.Series, target: float, max_diff: float | None = None) -> pd.Series:
+            def score_numeric(
+                series: pd.Series, target: float, max_diff: float | None = None
+            ) -> pd.Series:
                 values = pd.to_numeric(series, errors="coerce")
                 if max_diff is None or max_diff <= 0 or pd.isna(max_diff):
                     return values.eq(target).astype(float).fillna(0.0)
@@ -315,10 +335,14 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 tolerance = max_diff
                 if tolerance is None:
                     tolerance = pd.to_numeric(pitches[column], errors="coerce").std()
-                add_weighted_score(field, score_numeric(pitches[column], float(value), tolerance))
+                add_weighted_score(
+                    field, score_numeric(pitches[column], float(value), tolerance)
+                )
 
             bases_state = context_values.get("bases_state")
-            if bases_state is not None and {"on_1b", "on_2b", "on_3b"}.issubset(pitches.columns):
+            if bases_state is not None and {"on_1b", "on_2b", "on_3b"}.issubset(
+                pitches.columns
+            ):
                 runner_on_1b = pitches["on_1b"].notna()
                 runner_on_2b = pitches["on_2b"].notna()
                 runner_on_3b = pitches["on_3b"].notna()
@@ -352,7 +376,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             n_samples = max(100, int(len(pitches) * sample_pctg))
             pitches = pitches.head(n_samples)
 
-            self.logger.debug(f"successfully fetched {pitches.shape[0]} similar pitches")
+            self.logger.debug(
+                f"successfully fetched {pitches.shape[0]} similar pitches"
+            )
             return pitches
 
         except HTTPException as e:
@@ -384,36 +410,50 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
         try:
             # append "similarity score" column to pitches for each parameter
-            pitches["score_pitcher_name"] = pitches["pitcher"].eq(pitcher_id).astype(float)
+            pitches["score_pitcher_name"] = (
+                pitches["pitcher"].eq(pitcher_id).astype(float)
+            )
             pitches["score_balls"] = pitches["balls"].eq(balls).astype(float)
             pitches["score_strikes"] = pitches["strikes"].eq(strikes).astype(float)
-            pitches["score_score_bat"] = pitches["bat_score"].eq(score_bat).astype(float)
-            pitches["score_score_fld"] = pitches["fld_score"].eq(score_fld).astype(float)
-            pitches["score_game_date"] = pitches["game_date"].eq(game_date).astype(float)
-            pitches["score_pitch_type"] = pitches["pitch_type"].eq(pitch_type).astype(float)
-            pitches["score_pitch_speed"] = pitches["release_speed"].eq(pitch_speed).astype(float)
+            pitches["score_score_bat"] = (
+                pitches["bat_score"].eq(score_bat).astype(float)
+            )
+            pitches["score_score_fld"] = (
+                pitches["fld_score"].eq(score_fld).astype(float)
+            )
+            pitches["score_game_date"] = (
+                pitches["game_date"].eq(game_date).astype(float)
+            )
+            pitches["score_pitch_type"] = (
+                pitches["pitch_type"].eq(pitch_type).astype(float)
+            )
+            pitches["score_pitch_speed"] = (
+                pitches["release_speed"].eq(pitch_speed).astype(float)
+            )
             pitches["score_pitch_x"] = pitches["plate_x"].eq(pitch_x).astype(float)
             pitches["score_pitch_z"] = pitches["plate_z"].eq(pitch_z).astype(float)
 
             # create a single similarity score: a weighted average of the individual similarity scores above
             pitches["similarity_score"] = (
-                pitches["score_pitcher_name"] * 0.25 +
-                pitches["score_balls"] * 0.15 +
-                pitches["score_strikes"] * 0.15 +
-                pitches["score_score_bat"] * 0.05 +
-                pitches["score_score_fld"] * 0.05 +
-                pitches["score_game_date"] * 0.1 +
-                pitches["score_pitch_type"] * 0.05 +
-                pitches["score_pitch_speed"] * 0.05 +
-                pitches["score_pitch_x"] * 0.05 +
-                pitches["score_pitch_z"] * 0.05
+                pitches["score_pitcher_name"] * 0.25
+                + pitches["score_balls"] * 0.15
+                + pitches["score_strikes"] * 0.15
+                + pitches["score_score_bat"] * 0.05
+                + pitches["score_score_fld"] * 0.05
+                + pitches["score_game_date"] * 0.1
+                + pitches["score_pitch_type"] * 0.05
+                + pitches["score_pitch_speed"] * 0.05
+                + pitches["score_pitch_x"] * 0.05
+                + pitches["score_pitch_z"] * 0.05
             )
 
             # sort pitches by similarity score and return the top N pitches
             pitches = pitches.sort_values(by="similarity_score", ascending=False)
             pitches = pitches.head(int(len(pitches) * sample_pctg))
 
-            self.logger.debug(f"successfully fetched {pitches.shape[0]} similar pitches")
+            self.logger.debug(
+                f"successfully fetched {pitches.shape[0]} similar pitches"
+            )
             return pitches
 
         except HTTPException as e:
@@ -439,7 +479,10 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         self.logger.debug("digest_pitch_data called")
 
         try:
-            def quantiles(series: pd.Series) -> tuple[float, float, float, float, float]:
+
+            def quantiles(
+                series: pd.Series,
+            ) -> tuple[float, float, float, float, float]:
                 q = series.quantile([0.05, 0.25, 0.5, 0.75, 0.95])
                 return (
                     q.loc[0.05],
@@ -468,13 +511,23 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "pitch_z_std": pitch_z_std,
             }
 
-            fastballs = pitches.loc[(pitches["pitch_type"] == "FF") | (pitches["pitch_type"] == "FC") | (pitches["pitch_type"] == "SI")]
+            fastballs = pitches.loc[
+                (pitches["pitch_type"] == "FF")
+                | (pitches["pitch_type"] == "FC")
+                | (pitches["pitch_type"] == "SI")
+            ]
             prob_fastballs = fastballs.shape[0] / pitches.shape[0]
-            offspeed = pitches.loc[(pitches["pitch_type"] != "FF") & (pitches["pitch_type"] != "FC") & (pitches["pitch_type"] != "SI")]
+            offspeed = pitches.loc[
+                (pitches["pitch_type"] != "FF")
+                & (pitches["pitch_type"] != "FC")
+                & (pitches["pitch_type"] != "SI")
+            ]
             prob_offspeed = offspeed.shape[0] / pitches.shape[0]
 
             fastball_type_value_counts = fastballs["pitch_type"].value_counts()
-            fastball_type_probs = fastball_type_value_counts / fastball_type_value_counts.sum()
+            fastball_type_probs = (
+                fastball_type_value_counts / fastball_type_value_counts.sum()
+            )
             fastball_speed_mean = fastballs["release_speed"].mean()
             fastball_speed_std = fastballs["release_speed"].std()
             (
@@ -504,7 +557,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             ) = quantiles(fastballs["plate_z"])
 
             offspeed_type_value_counts = offspeed["pitch_type"].value_counts()
-            offspeed_type_probs = offspeed_type_value_counts / offspeed_type_value_counts.sum()
+            offspeed_type_probs = (
+                offspeed_type_value_counts / offspeed_type_value_counts.sum()
+            )
             offspeed_speed_mean = offspeed["release_speed"].mean()
             offspeed_speed_std = offspeed["release_speed"].std()
             (
@@ -657,7 +712,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             swing_events = pitches.loc[pitches["bat_speed"].notna()]
             swing_event_value_counts = swing_events["type"].value_counts()
-            swing_event_probs = swing_event_value_counts / swing_event_value_counts.sum()
+            swing_event_probs = (
+                swing_event_value_counts / swing_event_value_counts.sum()
+            )
             swing_probability = swing_event_value_counts.sum() / pitches.shape[0]
 
             swing_speed_mean = swing_events["bat_speed"].mean()
@@ -677,14 +734,33 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             contact_events = pitches.loc[pitches["type"] == "X"]
             contact_event_value_counts = contact_events["events"].value_counts()
-            contact_event_probs = contact_event_value_counts / contact_event_value_counts.sum()
+            contact_event_probs = (
+                contact_event_value_counts / contact_event_value_counts.sum()
+            )
             contact_probability = contact_event_value_counts.sum() / pitches.shape[0]
 
             contact_bb_type_value_counts = contact_events["bb_type"].value_counts()
-            contact_bb_type_probs = contact_bb_type_value_counts / contact_bb_type_value_counts.sum()
-            contact_hits = contact_events.loc[(contact_events["events"] == "single") | (contact_events["events"] == "double") | (contact_events["events"] == "triple") | (contact_events["events"] == "home_run")]
+            contact_bb_type_probs = (
+                contact_bb_type_value_counts / contact_bb_type_value_counts.sum()
+            )
+            contact_hits = contact_events.loc[
+                (contact_events["events"] == "single")
+                | (contact_events["events"] == "double")
+                | (contact_events["events"] == "triple")
+                | (contact_events["events"] == "home_run")
+            ]
             contact_ba = contact_hits.shape[0] / contact_events.shape[0]
-            contact_bases = contact_events["events"].apply(lambda x: 1 if x == "single" else 2 if x == "double" else 3 if x == "triple" else 4 if x == "home_run" else 0)
+            contact_bases = contact_events["events"].apply(
+                lambda x: 1
+                if x == "single"
+                else 2
+                if x == "double"
+                else 3
+                if x == "triple"
+                else 4
+                if x == "home_run"
+                else 0
+            )
             contact_slg = contact_bases.sum() / contact_events.shape[0]
             contact_woba = contact_hits.shape[0] / contact_events.shape[0]
             contact_exit_velocity_mean = contact_events["launch_speed"].mean()
@@ -717,9 +793,13 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             }
 
             basic = {
-                "outcome_probs": outcome_probs.rename(index=new_column_names_outcome).to_dict(),
+                "outcome_probs": outcome_probs.rename(
+                    index=new_column_names_outcome
+                ).to_dict(),
                 "swing_probability": swing_probability,
-                "swing_event_probs": swing_event_probs.rename(index=new_column_names_swing).to_dict(),
+                "swing_event_probs": swing_event_probs.rename(
+                    index=new_column_names_swing
+                ).to_dict(),
                 "contact_probability": contact_probability,
                 "contact_event_probs": contact_event_probs.to_dict(),
             }
@@ -763,7 +843,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                     "xBA": contact_xba,
                     "xSLG": contact_xslg,
                     "xwOBA": contact_xwoba,
-                }
+                },
             }
 
             self.logger.debug("digest_outcome_data completed successfully")
@@ -910,7 +990,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # Fetch batted ball data
             batted_balls = await get_all_batted_balls(cache=self.cache)
-            self.logger.debug(f"successfully fetched {batted_balls.shape[0]} batted balls")
+            self.logger.debug(
+                f"successfully fetched {batted_balls.shape[0]} batted balls"
+            )
 
             sample_pctg = 0.05
             # Get similar batted balls using continuous similarity scoring
@@ -926,10 +1008,15 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 game_date=game_date,
                 sample_pctg=sample_pctg,
             )
-            self.logger.debug(f"successfully found {similar_batted_balls.shape[0]} similar batted balls")
+            self.logger.debug(
+                f"successfully found {similar_batted_balls.shape[0]} similar batted balls"
+            )
 
             # Digest outcome data
-            basic_outcome_data, detailed_outcome_data = await self._digest_batted_ball_outcome_data(
+            (
+                basic_outcome_data,
+                detailed_outcome_data,
+            ) = await self._digest_batted_ball_outcome_data(
                 batted_balls=similar_batted_balls,
                 outs=outs,
                 bases_state=bases_state,
@@ -982,18 +1069,28 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         try:
             # Continuous similarity score for exit velocity (15 mph tolerance)
             speed_diff = (batted_balls["launch_speed"] - launch_speed).abs()
-            batted_balls["score_launch_speed"] = (1 - (speed_diff / 15.0)).clip(lower=0).fillna(0.0)
+            batted_balls["score_launch_speed"] = (
+                (1 - (speed_diff / 15.0)).clip(lower=0).fillna(0.0)
+            )
 
             # Continuous similarity score for launch angle (20 degree tolerance)
             angle_diff = (batted_balls["launch_angle"] - launch_angle).abs()
-            batted_balls["score_launch_angle"] = (1 - (angle_diff / 20.0)).clip(lower=0).fillna(0.0)
+            batted_balls["score_launch_angle"] = (
+                (1 - (angle_diff / 20.0)).clip(lower=0).fillna(0.0)
+            )
 
             # Spray angle similarity (if provided)
-            if spray_angle is not None and "hc_x" in batted_balls.columns and "hc_y" in batted_balls.columns:
+            if (
+                spray_angle is not None
+                and "hc_x" in batted_balls.columns
+                and "hc_y" in batted_balls.columns
+            ):
                 # Calculate spray angle from hit coordinates (approximate)
                 # hc_x: 0 = left field line, 125 = center, 250 = right field line
                 # Convert to spray angle: -45 (left) to +45 (right)
-                batted_balls["calc_spray_angle"] = ((batted_balls["hc_x"] - 125) / 125) * 45
+                batted_balls["calc_spray_angle"] = (
+                    (batted_balls["hc_x"] - 125) / 125
+                ) * 45
                 spray_diff = (batted_balls["calc_spray_angle"] - spray_angle).abs()
                 spray_scores = (1 - (spray_diff / 30.0)).clip(lower=0)
                 batted_balls["score_spray_angle"] = spray_scores.where(
@@ -1004,18 +1101,24 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # Batted ball type similarity (if provided)
             if bb_type is not None and "bb_type" in batted_balls.columns:
-                batted_balls["score_bb_type"] = batted_balls["bb_type"].eq(bb_type).astype(float)
+                batted_balls["score_bb_type"] = (
+                    batted_balls["bb_type"].eq(bb_type).astype(float)
+                )
             else:
                 batted_balls["score_bb_type"] = 0.0
 
             # Outs similarity (if provided)
             if outs is not None and "outs_when_up" in batted_balls.columns:
-                batted_balls["score_outs"] = batted_balls["outs_when_up"].eq(outs).astype(float)
+                batted_balls["score_outs"] = (
+                    batted_balls["outs_when_up"].eq(outs).astype(float)
+                )
             else:
                 batted_balls["score_outs"] = 0.0
 
             # Bases state similarity (if provided)
-            if bases_state is not None and {"on_1b", "on_2b", "on_3b"}.issubset(batted_balls.columns):
+            if bases_state is not None and {"on_1b", "on_2b", "on_3b"}.issubset(
+                batted_balls.columns
+            ):
                 runner_on_1b = batted_balls["on_1b"].notna()
                 runner_on_2b = batted_balls["on_2b"].notna()
                 runner_on_3b = batted_balls["on_3b"].notna()
@@ -1038,7 +1141,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
             # Batter similarity (if provided)
             if batter_id is not None and "batter" in batted_balls.columns:
-                batted_balls["score_batter"] = batted_balls["batter"].eq(batter_id).astype(float)
+                batted_balls["score_batter"] = (
+                    batted_balls["batter"].eq(batter_id).astype(float)
+                )
             else:
                 batted_balls["score_batter"] = 0.0
 
@@ -1047,27 +1152,33 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 target_date = pd.Timestamp(game_date)
                 dates = pd.to_datetime(batted_balls["game_date"], errors="coerce")
                 day_diff = (dates - target_date).dt.days.abs()
-                batted_balls["score_date"] = (1 - (day_diff / 365.0)).clip(lower=0).fillna(0.0)
+                batted_balls["score_date"] = (
+                    (1 - (day_diff / 365.0)).clip(lower=0).fillna(0.0)
+                )
             else:
                 batted_balls["score_date"] = 0.0
 
             # Weighted similarity score
             # EV and LA are the most important, optional fields contribute less
             batted_balls["similarity_score"] = (
-                batted_balls["score_launch_speed"] * 0.45 +
-                batted_balls["score_launch_angle"] * 0.40 +
-                batted_balls["score_spray_angle"] * 0.05 +
-                batted_balls["score_bases_state"] * 0.05 +
-                batted_balls["score_outs"] * 0.03 +
-                batted_balls["score_date"] * 0.02
+                batted_balls["score_launch_speed"] * 0.45
+                + batted_balls["score_launch_angle"] * 0.40
+                + batted_balls["score_spray_angle"] * 0.05
+                + batted_balls["score_bases_state"] * 0.05
+                + batted_balls["score_outs"] * 0.03
+                + batted_balls["score_date"] * 0.02
             )
 
             # Sort by similarity and take top N%
-            batted_balls = batted_balls.sort_values(by="similarity_score", ascending=False)
+            batted_balls = batted_balls.sort_values(
+                by="similarity_score", ascending=False
+            )
             n_samples = max(100, int(len(batted_balls) * sample_pctg))
             similar = batted_balls.head(n_samples)
 
-            self.logger.debug(f"successfully found {similar.shape[0]} similar batted balls")
+            self.logger.debug(
+                f"successfully found {similar.shape[0]} similar batted balls"
+            )
             return similar
 
         except HTTPException as e:
@@ -1117,7 +1228,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             for event, count in outcome_value_counts.items():
                 category = outcome_mapping.get(str(event), None)
                 if category:
-                    outcome_probs[category] = outcome_probs.get(category, 0) + count / total_events
+                    outcome_probs[category] = (
+                        outcome_probs.get(category, 0) + count / total_events
+                    )
 
             # Infer batted ball type based on launch angle
             la_mean = batted_balls["launch_angle"].mean()
@@ -1135,11 +1248,17 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             if "flyout" in outcome_probs:
                 flyout_prob = outcome_probs.pop("flyout", 0)
                 if bb_type_inferred == "ground_ball":
-                    outcome_probs["groundout"] = outcome_probs.get("groundout", 0) + flyout_prob
+                    outcome_probs["groundout"] = (
+                        outcome_probs.get("groundout", 0) + flyout_prob
+                    )
                 elif bb_type_inferred == "line_drive":
-                    outcome_probs["lineout"] = outcome_probs.get("lineout", 0) + flyout_prob
+                    outcome_probs["lineout"] = (
+                        outcome_probs.get("lineout", 0) + flyout_prob
+                    )
                 elif bb_type_inferred == "popup":
-                    outcome_probs["popout"] = outcome_probs.get("popout", 0) + flyout_prob
+                    outcome_probs["popout"] = (
+                        outcome_probs.get("popout", 0) + flyout_prob
+                    )
                 else:
                     outcome_probs["flyout"] = flyout_prob
 
@@ -1160,11 +1279,19 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                     outcome_probs.pop("force_out", None)
 
             # Calculate hit probability and expected stats
-            hits = batted_balls[batted_balls["events"].isin(["single", "double", "triple", "home_run"])]
-            hit_probability = len(hits) / len(batted_balls) if len(batted_balls) > 0 else 0
+            hits = batted_balls[
+                batted_balls["events"].isin(["single", "double", "triple", "home_run"])
+            ]
+            hit_probability = (
+                len(hits) / len(batted_balls) if len(batted_balls) > 0 else 0
+            )
 
             # Calculate xBA from the data
-            xba = batted_balls["estimated_ba_using_speedangle"].mean() if "estimated_ba_using_speedangle" in batted_balls.columns else hit_probability
+            xba = (
+                batted_balls["estimated_ba_using_speedangle"].mean()
+                if "estimated_ba_using_speedangle" in batted_balls.columns
+                else hit_probability
+            )
 
             basic = {
                 "outcome_probs": outcome_probs,
@@ -1177,17 +1304,29 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             launch_speed_mean = batted_balls["launch_speed"].mean()
             launch_angle_mean = batted_balls["launch_angle"].mean()
 
-            xslg = batted_balls["estimated_slg_using_speedangle"].mean() if "estimated_slg_using_speedangle" in batted_balls.columns else 0
-            xwoba = batted_balls["estimated_woba_using_speedangle"].mean() if "estimated_woba_using_speedangle" in batted_balls.columns else 0
+            xslg = (
+                batted_balls["estimated_slg_using_speedangle"].mean()
+                if "estimated_slg_using_speedangle" in batted_balls.columns
+                else 0
+            )
+            xwoba = (
+                batted_balls["estimated_woba_using_speedangle"].mean()
+                if "estimated_woba_using_speedangle" in batted_balls.columns
+                else 0
+            )
 
             detailed = {
-                "sample_launch_speed_mean": launch_speed_mean if pd.notna(launch_speed_mean) else 0,
-                "sample_launch_angle_mean": launch_angle_mean if pd.notna(launch_angle_mean) else 0,
+                "sample_launch_speed_mean": launch_speed_mean
+                if pd.notna(launch_speed_mean)
+                else 0,
+                "sample_launch_angle_mean": launch_angle_mean
+                if pd.notna(launch_angle_mean)
+                else 0,
                 "expected_stats": {
                     "xBA": xba if pd.notna(xba) else 0,
                     "xSLG": xslg if pd.notna(xslg) else 0,
                     "xwOBA": xwoba if pd.notna(xwoba) else 0,
-                }
+                },
             }
 
             self.logger.debug("_digest_batted_ball_outcome_data completed successfully")
@@ -1245,7 +1384,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 "date": 0.02,
             }
 
-            self.logger.debug("get_batted_ball_prediction_metadata completed successfully")
+            self.logger.debug(
+                "get_batted_ball_prediction_metadata completed successfully"
+            )
             return {
                 "n_batted_balls_sampled": n_batted_balls_sampled,
                 "sample_pctg": sample_pctg,
@@ -1270,7 +1411,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
         try:
             if n > len(pitches):
-                raise HTTPException(status_code=400, detail="n is greater than the number of pitches")
+                raise HTTPException(
+                    status_code=400, detail="n is greater than the number of pitches"
+                )
 
             sampled_pitches = pitches.sample(n)
             sampled_pitches_list: list[api_types.Pitch] = []
@@ -1290,7 +1433,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 spin_axis = coerce_float(getattr(pitch, "spin_axis", None))
                 release_pos_x = coerce_float(getattr(pitch, "release_pos_x", None))
                 release_pos_z = coerce_float(getattr(pitch, "release_pos_z", None))
-                release_extension = coerce_float(getattr(pitch, "release_extension", None))
+                release_extension = coerce_float(
+                    getattr(pitch, "release_extension", None)
+                )
                 vx0 = coerce_float(getattr(pitch, "vx0", None))
                 vy0 = coerce_float(getattr(pitch, "vy0", None))
                 vz0 = coerce_float(getattr(pitch, "vz0", None))
@@ -1322,7 +1467,11 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 result_value = getattr(pitch, "events", None)
                 if result_value is None or pd.isna(result_value):
                     result_value = getattr(pitch, "description", None)
-                result = "unknown" if result_value is None or pd.isna(result_value) else str(result_value)
+                result = (
+                    "unknown"
+                    if result_value is None or pd.isna(result_value)
+                    else str(result_value)
+                )
 
                 if speed is None or pd.isna(speed):
                     continue
@@ -1374,7 +1523,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 sampled_pitches_list.append(sampled_pitch)
 
             if len(sampled_pitches_list) < n:
-                self.logger.warning("sampled pitches contain missing fields; returning fewer samples")
+                self.logger.warning(
+                    "sampled pitches contain missing fields; returning fewer samples"
+                )
 
             return sampled_pitches_list
 

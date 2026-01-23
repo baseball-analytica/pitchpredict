@@ -5,7 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from pitchpredict.backend.algs.deep.building import _build_pitch_tokens_and_contexts, _clean_pitch_rows
+from pitchpredict.backend.algs.deep.building import (
+    _build_pitch_tokens_and_contexts,
+    _clean_pitch_rows,
+)
 from pitchpredict.backend.algs.deep.types import PitchContext, PitchToken
 
 
@@ -93,7 +96,9 @@ async def test_build_pitch_tokens_includes_new_feature_tokens_and_counts() -> No
         ]
     )
 
-    pitch_tokens, pitch_contexts, stats = await _build_pitch_tokens_and_contexts(pitches)
+    pitch_tokens, pitch_contexts, stats = await _build_pitch_tokens_and_contexts(
+        pitches
+    )
 
     assert stats.sessions == 2
     assert stats.session_starts == stats.session_ends == 2

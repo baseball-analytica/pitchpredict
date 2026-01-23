@@ -5,7 +5,7 @@ import logging
 from typing import Any, Literal
 
 from fastapi import HTTPException
-import pybaseball # type: ignore
+import pybaseball  # type: ignore
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
 from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
@@ -233,7 +233,9 @@ class PitchPredict:
         alg = self.algorithms.get(request.algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {request.algorithm}")
-            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {request.algorithm}")
+            raise HTTPException(
+                status_code=400, detail=f"unrecognized algorithm: {request.algorithm}"
+            )
         self.logger.debug(f"using algorithm: {request.algorithm}")
 
         try:
@@ -270,7 +272,9 @@ class PitchPredict:
         alg = self.algorithms.get(algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {algorithm}")
-            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {algorithm}")
+            raise HTTPException(
+                status_code=400, detail=f"unrecognized algorithm: {algorithm}"
+            )
         self.logger.debug(f"using algorithm: {algorithm}")
 
         try:
@@ -316,7 +320,9 @@ class PitchPredict:
         alg = self.algorithms.get(algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {algorithm}")
-            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {algorithm}")
+            raise HTTPException(
+                status_code=400, detail=f"unrecognized algorithm: {algorithm}"
+            )
         self.logger.debug(f"using algorithm: {algorithm}")
 
         try:

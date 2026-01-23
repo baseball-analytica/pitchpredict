@@ -22,7 +22,7 @@ def init_logger(
 
     # ensure the log directory exists
     os.makedirs(log_dir, exist_ok=True)
-    
+
     # setup file handler
     file_handler = logging.FileHandler(
         f"{log_dir}/{datetime.now().strftime('%Y-%m-%d')}.log"
@@ -46,8 +46,8 @@ def init_logger(
     # configure the PitchPredict logger
     pp_logger = logging.getLogger("pitchpredict")
     pp_logger.setLevel(logging.DEBUG)
-    pp_logger.propagate = False # prevent double logging
-    pp_logger.handlers.clear() # clear any existing handlers
+    pp_logger.propagate = False  # prevent double logging
+    pp_logger.handlers.clear()  # clear any existing handlers
     pp_logger.addHandler(file_handler)
     pp_logger.addHandler(console_handler)
 

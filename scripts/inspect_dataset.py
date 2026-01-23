@@ -122,10 +122,14 @@ def load_tokens(data_dir: Path) -> np.memmap | None:
     return np.memmap(tokens_path, dtype=TOKEN_DTYPE, mode="r")
 
 
-def compute_token_stats(tokens: np.ndarray) -> tuple[Counter, dict[TokenCategory, Counter]]:
+def compute_token_stats(
+    tokens: np.ndarray,
+) -> tuple[Counter, dict[TokenCategory, Counter]]:
     """Compute token counts and category-wise counts."""
     token_counts: Counter = Counter()
-    category_counts: dict[TokenCategory, Counter] = {cat: Counter() for cat in TokenCategory}
+    category_counts: dict[TokenCategory, Counter] = {
+        cat: Counter() for cat in TokenCategory
+    }
 
     # Count all tokens
     unique, counts = np.unique(tokens, return_counts=True)
@@ -141,7 +145,9 @@ def compute_token_stats(tokens: np.ndarray) -> tuple[Counter, dict[TokenCategory
     return token_counts, category_counts
 
 
-def compute_context_stats(data_dir: Path, token_count: int) -> dict[str, dict[str, Any]]:
+def compute_context_stats(
+    data_dir: Path, token_count: int
+) -> dict[str, dict[str, Any]]:
     """Compute statistics for all context fields."""
     context_stats: dict[str, dict[str, Any]] = {}
     context_prefix = data_dir / "pitch_context"
@@ -167,7 +173,10 @@ def compute_context_stats(data_dir: Path, token_count: int) -> dict[str, dict[st
             distribution = {}
             for val, cnt in zip(unique, counts):
                 decoded = spec.decode(val)
-                distribution[decoded] = {"count": int(cnt), "pct": float(cnt) / total * 100}
+                distribution[decoded] = {
+                    "count": int(cnt),
+                    "pct": float(cnt) / total * 100,
+                }
             stats["distribution"] = distribution
         else:
             # For numeric fields, compute min/max/mean/std
@@ -236,10 +245,12 @@ def print_split_summary(stats: SplitStats) -> None:
     pa_count = stats.token_counts.get(PitchToken.PA_END, 0)
     session_count = stats.token_counts.get(PitchToken.SESSION_END, 0)
 
-    print(f"  {stats.name.upper():8} | Tokens: {format_number(stats.token_count):>15} | "
-          f"Pitches: {format_number(pitch_count):>12} | "
-          f"PAs: {format_number(pa_count):>10} | "
-          f"Size: {format_size(stats.total_size_bytes):>10}")
+    print(
+        f"  {stats.name.upper():8} | Tokens: {format_number(stats.token_count):>15} | "
+        f"Pitches: {format_number(pitch_count):>12} | "
+        f"PAs: {format_number(pa_count):>10} | "
+        f"Size: {format_size(stats.total_size_bytes):>10}"
+    )
 
 
 def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
@@ -254,7 +265,9 @@ def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
 
     # Aggregate token counts
     combined_token_counts: Counter = Counter()
-    combined_category_counts: dict[TokenCategory, Counter] = {cat: Counter() for cat in TokenCategory}
+    combined_category_counts: dict[TokenCategory, Counter] = {
+        cat: Counter() for cat in TokenCategory
+    }
     for stats in all_stats:
         combined_token_counts.update(stats.token_counts)
         for cat, counts in stats.category_counts.items():
@@ -264,7 +277,9 @@ def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
     print(f"Total Tokens: {format_number(total_tokens)}")
     print(f"Total Size: {format_size(total_size)}")
 
-    pitch_count = sum(combined_category_counts.get(TokenCategory.PITCH_TYPE, {}).values())
+    pitch_count = sum(
+        combined_category_counts.get(TokenCategory.PITCH_TYPE, {}).values()
+    )
     pa_count = combined_token_counts.get(PitchToken.PA_END, 0)
     session_count = combined_token_counts.get(PitchToken.SESSION_END, 0)
 
@@ -281,7 +296,9 @@ def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
             continue
         total_in_cat = sum(cat_counts.values())
         pct_of_total = (total_in_cat / total_tokens * 100) if total_tokens > 0 else 0
-        print(f"\n{category.name}: {format_number(total_in_cat)} ({pct_of_total:.1f}% of all tokens)")
+        print(
+            f"\n{category.name}: {format_number(total_in_cat)} ({pct_of_total:.1f}% of all tokens)"
+        )
 
         top_tokens = cat_counts.most_common(top_n)
         for token, count in top_tokens:
@@ -313,7 +330,9 @@ def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
                     combined_dist[key] = combined_dist.get(key, 0) + val["count"]
         total = sum(combined_dist.values())
         if total > 0:
-            dist_str = ", ".join(f"{k}={v/total*100:.1f}%" for k, v in sorted(combined_dist.items()))
+            dist_str = ", ".join(
+                f"{k}={v / total * 100:.1f}%" for k, v in sorted(combined_dist.items())
+            )
             print(f"  {field_name}: {dist_str}")
 
     # Numeric fields - compute combined min/max and weighted mean
@@ -360,7 +379,9 @@ def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
             print(f"    raw: [{raw_min:.3f}, {raw_max:.3f}] (mean: {raw_mean:.3f})")
             print(f"    decoded: [{dec_min}, {dec_max}] (mean: {dec_mean})")
         else:
-            print(f"  {field_name}: [{raw_min:.3f}, {raw_max:.3f}] (mean: {raw_mean:.3f})")
+            print(
+                f"  {field_name}: [{raw_min:.3f}, {raw_max:.3f}] (mean: {raw_mean:.3f})"
+            )
 
 
 def main() -> None:

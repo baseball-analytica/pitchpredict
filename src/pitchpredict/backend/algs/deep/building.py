@@ -43,6 +43,7 @@ class PitchDatasetStats:
                 f"mismatched plate appearance counts: {self.plate_appearance_starts} starts vs {self.plate_appearance_ends} ends"
             )
 
+
 async def build_deep_model(
     date_start: str,
     date_end: str,
@@ -74,7 +75,11 @@ async def build_deep_model(
     pitches = _clean_pitch_rows(pitches)
     pitches = _sort_pitches_by_session(pitches)
 
-    pitch_tokens, pitch_contexts, dataset_stats = await _build_pitch_tokens_and_contexts(pitches, dataset_log_interval)
+    (
+        pitch_tokens,
+        pitch_contexts,
+        dataset_stats,
+    ) = await _build_pitch_tokens_and_contexts(pitches, dataset_log_interval)
     logger.info(
         "dataset includes %d sessions and %d plate appearances from %d pitch rows",
         dataset_stats.sessions,
@@ -93,13 +98,17 @@ async def build_deep_model(
     )
     if data_only:
         raise ValueError("data_only is True, so we don't need to train the model")
-    train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        pitch_dataset, [0.8, 0.2]
+    )
 
-    input_dim = pitch_dataset.feature_dim # type: ignore[attr-defined]
+    input_dim = pitch_dataset.feature_dim  # type: ignore[attr-defined]
     dataset_num_classes = pitch_dataset.num_classes
     effective_num_classes = num_classes or vocab_size or dataset_num_classes
     if effective_num_classes < dataset_num_classes:
-        raise ValueError(f"num_classes ({effective_num_classes}) must cover all pitch types ({dataset_num_classes})")
+        raise ValueError(
+            f"num_classes ({effective_num_classes}) must cover all pitch types ({dataset_num_classes})"
+        )
 
     model = DeepPitcherModel(
         input_dim=input_dim,
@@ -150,10 +159,14 @@ async def build_deep_model_from_dataset(
     """
     logger.debug("build_deep_model_from_dataset called")
 
-    pitch_dataset = PitchDataset.load(tokens_path, contexts_path, seed=0, pad_id=0, dataset_log_interval=10000)
-    train_dataset, val_dataset = torch.utils.data.random_split(pitch_dataset, [0.8, 0.2])
+    pitch_dataset = PitchDataset.load(
+        tokens_path, contexts_path, seed=0, pad_id=0, dataset_log_interval=10000
+    )
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        pitch_dataset, [0.8, 0.2]
+    )
 
-    input_dim = pitch_dataset.feature_dim # type: ignore[attr-defined]
+    input_dim = pitch_dataset.feature_dim  # type: ignore[attr-defined]
     num_classes = pitch_dataset.num_classes
 
     model = DeepPitcherModel(
@@ -210,14 +223,14 @@ async def _build_pitch_tokens_and_contexts(
 
     pitches = pitches.sort_values(by=["game_pk", "at_bat_number", "pitch_number"])
 
-    for i in tqdm(range(pitches.shape[0]), total=pitches.shape[0], desc="tokenizing pitches"):
+    for i in tqdm(
+        range(pitches.shape[0]), total=pitches.shape[0], desc="tokenizing pitches"
+    ):
         try:
             row = pitches.iloc[i]
 
             if not row["pitch_type"]:
                 continue
-
-        
 
             stats.total_pitches += 1
 
@@ -244,7 +257,11 @@ async def _build_pitch_tokens_and_contexts(
 
             pa_key = (int(row["game_pk"]), int(row["at_bat_number"]))
             if pa_key != last_pa_key:
-                if last_pa_key is not None and not last_pa_closed and last_context is not None:
+                if (
+                    last_pa_key is not None
+                    and not last_pa_closed
+                    and last_context is not None
+                ):
                     pitch_tokens.append(PitchToken.PA_END)
                     pitch_contexts.append(last_context)
                     stats.plate_appearance_ends += 1
@@ -318,7 +335,9 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.SPIN_RATE_IS_GT3250)
             else:
                 offset = _bin_index(spin_rate, base=750.0, step=250.0, max_offset=9)
-                token = _offset_token(PitchToken.SPIN_RATE_IS_750_1000, offset, max_offset=9)
+                token = _offset_token(
+                    PitchToken.SPIN_RATE_IS_750_1000, offset, max_offset=9
+                )
                 tokens_this_pitch.append(token)
 
             spin_axis = round(row["spin_axis"])
@@ -328,7 +347,9 @@ async def _build_pitch_tokens_and_contexts(
                 raise ValueError(f"spin axis out of range: {spin_axis}")
             else:
                 offset = min(11, int(spin_axis // 30))
-                token = _offset_token(PitchToken.SPIN_AXIS_IS_0_30, offset, max_offset=11)
+                token = _offset_token(
+                    PitchToken.SPIN_AXIS_IS_0_30, offset, max_offset=11
+                )
                 tokens_this_pitch.append(token)
 
             release_pos_x = round(row["release_pos_x"], 2)
@@ -338,7 +359,9 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.RELEASE_POS_X_IS_GT4)
             else:
                 offset = _bin_index(release_pos_x, base=-4.0, step=0.25, max_offset=31)
-                token = _offset_token(PitchToken.RELEASE_POS_X_IS_N4_N375, offset, max_offset=31)
+                token = _offset_token(
+                    PitchToken.RELEASE_POS_X_IS_N4_N375, offset, max_offset=31
+                )
                 tokens_this_pitch.append(token)
 
             release_pos_z = round(row["release_pos_z"], 2)
@@ -348,7 +371,9 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.RELEASE_POS_Z_IS_GT7)
             else:
                 offset = _bin_index(release_pos_z, base=4.0, step=0.25, max_offset=11)
-                token = _offset_token(PitchToken.RELEASE_POS_Z_IS_4_425, offset, max_offset=11)
+                token = _offset_token(
+                    PitchToken.RELEASE_POS_Z_IS_4_425, offset, max_offset=11
+                )
                 tokens_this_pitch.append(token)
 
             vx0 = round(row["vx0"], 2)
@@ -418,7 +443,9 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.RELEASE_EXTENSION_IS_GT75)
             else:
                 offset = _bin_index(release_extension, base=5.0, step=0.5, max_offset=4)
-                token = _offset_token(PitchToken.RELEASE_EXTENSION_IS_5_55, offset, max_offset=4)
+                token = _offset_token(
+                    PitchToken.RELEASE_EXTENSION_IS_5_55, offset, max_offset=4
+                )
                 tokens_this_pitch.append(token)
 
             plate_pos_x = round(row["plate_x"], 2)
@@ -428,7 +455,9 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.PLATE_POS_X_IS_GT2)
             else:
                 offset = _bin_index(plate_pos_x, base=-2.0, step=0.25, max_offset=15)
-                token = _offset_token(PitchToken.PLATE_POS_X_IS_N2_N175, offset, max_offset=15)
+                token = _offset_token(
+                    PitchToken.PLATE_POS_X_IS_N2_N175, offset, max_offset=15
+                )
                 tokens_this_pitch.append(token)
 
             plate_pos_z = round(row["plate_z"], 2)
@@ -438,7 +467,9 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.PLATE_POS_Z_IS_GT5)
             else:
                 offset = _bin_index(plate_pos_z, base=-1.0, step=0.25, max_offset=23)
-                token = _offset_token(PitchToken.PLATE_POS_Z_IS_N1_N075, offset, max_offset=23)
+                token = _offset_token(
+                    PitchToken.PLATE_POS_Z_IS_N1_N075, offset, max_offset=23
+                )
                 tokens_this_pitch.append(token)
 
             match row["description"]:
@@ -473,7 +504,9 @@ async def _build_pitch_tokens_and_contexts(
                 case "swinging_strike":
                     tokens_this_pitch.append(PitchToken.RESULT_IS_SWINGING_STRIKE)
                 case "swinging_strike_blocked":
-                    tokens_this_pitch.append(PitchToken.RESULT_IS_SWINGING_STRIKE_BLOCKED)
+                    tokens_this_pitch.append(
+                        PitchToken.RESULT_IS_SWINGING_STRIKE_BLOCKED
+                    )
                 case "blocked_ball":
                     tokens_this_pitch.append(PitchToken.RESULT_IS_BLOCKED_BALL)
                 case "automatic_ball":
@@ -487,7 +520,6 @@ async def _build_pitch_tokens_and_contexts(
                 tokens_this_pitch.append(PitchToken.PA_END)
                 stats.plate_appearance_ends += 1
                 last_pa_closed = True
-
 
             runner_on_first = not isinstance(row["on_1b"], NAType) or False
             runner_on_second = not isinstance(row["on_2b"], NAType) or False
@@ -510,7 +542,9 @@ async def _build_pitch_tokens_and_contexts(
                 case (True, True, True):
                     bases_state = 7
                 case _:
-                    raise ValueError(f"unknown bases state: {runner_on_first}, {runner_on_second}, {runner_on_third}")
+                    raise ValueError(
+                        f"unknown bases state: {runner_on_first}, {runner_on_second}, {runner_on_third}"
+                    )
 
             game_date = row["game_date"].strftime("%Y-%m-%d")
 
@@ -595,7 +629,13 @@ def _build_pitch_dataset(
         pad_id=pad_id,
         dataset_log_interval=dataset_log_interval,
     )
-    dataset.save(tokens_path, contexts_path, split_val_ratio=0.01, split_test_ratio=0.01, split_overwrite=True)
+    dataset.save(
+        tokens_path,
+        contexts_path,
+        split_val_ratio=0.01,
+        split_test_ratio=0.01,
+        split_overwrite=True,
+    )
 
     logger.info("_build_pitch_dataset completed successfully")
     return dataset
@@ -610,17 +650,32 @@ def _sort_pitches_by_session(pitches: pd.DataFrame) -> pd.DataFrame:
     if pitches.empty:
         return pitches
 
-    required_columns = ["game_pk", "pitcher", "at_bat_number", "pitch_number", "game_date"]
+    required_columns = [
+        "game_pk",
+        "pitcher",
+        "at_bat_number",
+        "pitch_number",
+        "game_date",
+    ]
     missing = [col for col in required_columns if col not in pitches.columns]
     if missing:
         raise ValueError(f"missing required columns for session sorting: {missing}")
 
-    session_start = pitches.groupby(["game_pk", "pitcher"])["at_bat_number"].transform("min")
+    session_start = pitches.groupby(["game_pk", "pitcher"])["at_bat_number"].transform(
+        "min"
+    )
 
     sorted_pitches = (
         pitches.assign(_session_start=session_start)
         .sort_values(
-            by=["game_date", "game_pk", "_session_start", "pitcher", "at_bat_number", "pitch_number"],
+            by=[
+                "game_date",
+                "game_pk",
+                "_session_start",
+                "pitcher",
+                "at_bat_number",
+                "pitch_number",
+            ],
             kind="mergesort",
         )
         .drop(columns="_session_start")
@@ -703,7 +758,9 @@ def _clean_pitch_rows(pitches: pd.DataFrame) -> pd.DataFrame:
     fill_zero_float_columns = ["sz_top", "sz_bot"]
 
     essential_columns = [
-        col for col in required_columns if col not in fill_zero_int_columns + fill_zero_float_columns
+        col
+        for col in required_columns
+        if col not in fill_zero_int_columns + fill_zero_float_columns
     ]
     cleaned = pitches.dropna(subset=essential_columns).copy()
 
