@@ -56,14 +56,19 @@ class PitchPredict:
         Perform post-initialization tasks, including validation.
         """
         # check logging stuff
+        self.logger = logging.getLogger("pitchpredict")
         if self.enable_logging:
             init_logger(
                 log_dir=self.log_dir,
                 log_level_console=self.log_level_console,
                 log_level_file=self.log_level_file,
             )
-            self.logger = logging.getLogger("pitchpredict")
             self.logger.info("logging initialized")
+        else:
+            # Disable logging by setting a high level and adding a NullHandler
+            self.logger.setLevel(logging.CRITICAL + 1)
+            if not self.logger.handlers:
+                self.logger.addHandler(logging.NullHandler())
 
         # check cache stuff
         if self.enable_cache:
