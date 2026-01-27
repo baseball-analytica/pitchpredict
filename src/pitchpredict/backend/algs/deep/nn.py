@@ -77,6 +77,7 @@ def _decode_game_date(value: Any) -> str:
     val = max(0.0, min(1.0, value))
     return date.fromordinal(int(val * (max_date - min_date) + min_date)).isoformat()
 
+
 def _encode_age(value: int) -> float:
     if not value or value < 15:
         return 0.0
@@ -84,7 +85,8 @@ def _encode_age(value: int) -> float:
     mean_age = 28.5
     std_dev = 4.0
 
-    return (value - mean_age) / std_dev # z-score
+    return (value - mean_age) / std_dev  # z-score
+
 
 def _decode_age(value: Any) -> float:
     if value == 0.0:
@@ -94,17 +96,22 @@ def _decode_age(value: Any) -> float:
     std_dev = 4.0
     return value * std_dev + mean_age
 
+
 def _encode_score(value: int) -> float:
-    return float(value) / 10.0 # normalize to 0-1
+    return float(value) / 10.0  # normalize to 0-1
+
 
 def _decode_score(value: Any) -> float:
     return value * 10.0
 
+
 def _encode_pitch_number(value: int) -> float:
-    return float(value) / 100.0 # normalize to 0-1
+    return float(value) / 100.0  # normalize to 0-1
+
 
 def _decode_pitch_number(value: Any) -> float:
     return value * 100.0
+
 
 def _encode_strike_zone_top(value: float) -> float:
     if not value or value < 0.0:
@@ -112,7 +119,8 @@ def _encode_strike_zone_top(value: float) -> float:
 
     mean_top = 3.4
     std_dev = 0.2
-    return (value - mean_top) / std_dev # z-score
+    return (value - mean_top) / std_dev  # z-score
+
 
 def _decode_strike_zone_top(value: Any) -> float:
     if value == 0.0:
@@ -122,13 +130,15 @@ def _decode_strike_zone_top(value: Any) -> float:
     std_dev = 0.2
     return value * std_dev + mean_top
 
+
 def _encode_strike_zone_bottom(value: float) -> float:
     if not value or value < 0.0:
         return 0.0
 
     mean_bottom = 1.6
     std_dev = 0.1
-    return (value - mean_bottom) / std_dev # z-score
+    return (value - mean_bottom) / std_dev  # z-score
+
 
 def _decode_strike_zone_bottom(value: Any) -> float:
     if value == 0.0:
@@ -138,37 +148,108 @@ def _decode_strike_zone_bottom(value: Any) -> float:
     std_dev = 0.1
     return value * std_dev + mean_bottom
 
-_CONTEXT_FIELD_SPECS: dict[str, _ContextFieldSpec] = {
-    "pitcher_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("pitcher_id"), _encode_int, _decode_int),
-    "batter_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("batter_id"), _encode_int, _decode_int),
-    "pitcher_age": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("pitcher_age"), _encode_age, _decode_age),
-    "pitcher_throws": _ContextFieldSpec(UINT8_DTYPE, attrgetter("pitcher_throws"), _encode_handedness, _decode_handedness),
-    "batter_age": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("batter_age"), _encode_age, _decode_age),
-    "batter_hits": _ContextFieldSpec(UINT8_DTYPE, attrgetter("batter_hits"), _encode_handedness, _decode_handedness),
-    "count_balls": _ContextFieldSpec(INT32_DTYPE, attrgetter("count_balls"), _encode_int, _decode_int),
-    "count_strikes": _ContextFieldSpec(INT32_DTYPE, attrgetter("count_strikes"), _encode_int, _decode_int),
-    "outs": _ContextFieldSpec(INT32_DTYPE, attrgetter("outs"), _encode_int, _decode_int),
-    "bases_state": _ContextFieldSpec(INT32_DTYPE, attrgetter("bases_state"), _encode_int, _decode_int),
-    "score_bat": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("score_bat"), _encode_score, _decode_score),
-    "score_fld": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("score_fld"), _encode_score, _decode_score),
-    "inning": _ContextFieldSpec(INT32_DTYPE, attrgetter("inning"), _encode_int, _decode_int),
-    "pitch_number": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("pitch_number"), _encode_pitch_number, _decode_pitch_number),
-    "number_through_order": _ContextFieldSpec(INT32_DTYPE, attrgetter("number_through_order"), _encode_int, _decode_int),
-    "game_date": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("game_date"), _encode_game_date, _decode_game_date),
-    "fielder_2_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_2_id"), _encode_int, _decode_int),
-    "fielder_3_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_3_id"), _encode_int, _decode_int),
-    "fielder_4_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_4_id"), _encode_int, _decode_int),
-    "fielder_5_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_5_id"), _encode_int, _decode_int),
-    "fielder_6_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_6_id"), _encode_int, _decode_int),
-    "fielder_7_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_7_id"), _encode_int, _decode_int),
-    "fielder_8_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_8_id"), _encode_int, _decode_int),
-    "fielder_9_id": _ContextFieldSpec(INT32_DTYPE, attrgetter("fielder_9_id"), _encode_int, _decode_int),
-    "batter_days_since_prev_game": _ContextFieldSpec(INT32_DTYPE, attrgetter("batter_days_since_prev_game"), _encode_int, _decode_int),
-    "pitcher_days_since_prev_game": _ContextFieldSpec(INT32_DTYPE, attrgetter("pitcher_days_since_prev_game"), _encode_int, _decode_int),
-    "strike_zone_top": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("strike_zone_top"), _encode_strike_zone_top, _decode_strike_zone_top),
-    "strike_zone_bottom": _ContextFieldSpec(FLOAT32_DTYPE, attrgetter("strike_zone_bottom"), _encode_strike_zone_bottom, _decode_strike_zone_bottom),
-} # keep parallel with dataset.PackedPitchChunk but without x and y
 
+_CONTEXT_FIELD_SPECS: dict[str, _ContextFieldSpec] = {
+    "pitcher_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("pitcher_id"), _encode_int, _decode_int
+    ),
+    "batter_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("batter_id"), _encode_int, _decode_int
+    ),
+    "pitcher_age": _ContextFieldSpec(
+        FLOAT32_DTYPE, attrgetter("pitcher_age"), _encode_age, _decode_age
+    ),
+    "pitcher_throws": _ContextFieldSpec(
+        UINT8_DTYPE,
+        attrgetter("pitcher_throws"),
+        _encode_handedness,
+        _decode_handedness,
+    ),
+    "batter_age": _ContextFieldSpec(
+        FLOAT32_DTYPE, attrgetter("batter_age"), _encode_age, _decode_age
+    ),
+    "batter_hits": _ContextFieldSpec(
+        UINT8_DTYPE, attrgetter("batter_hits"), _encode_handedness, _decode_handedness
+    ),
+    "count_balls": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("count_balls"), _encode_int, _decode_int
+    ),
+    "count_strikes": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("count_strikes"), _encode_int, _decode_int
+    ),
+    "outs": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("outs"), _encode_int, _decode_int
+    ),
+    "bases_state": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("bases_state"), _encode_int, _decode_int
+    ),
+    "score_bat": _ContextFieldSpec(
+        FLOAT32_DTYPE, attrgetter("score_bat"), _encode_score, _decode_score
+    ),
+    "score_fld": _ContextFieldSpec(
+        FLOAT32_DTYPE, attrgetter("score_fld"), _encode_score, _decode_score
+    ),
+    "inning": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("inning"), _encode_int, _decode_int
+    ),
+    "pitch_number": _ContextFieldSpec(
+        FLOAT32_DTYPE,
+        attrgetter("pitch_number"),
+        _encode_pitch_number,
+        _decode_pitch_number,
+    ),
+    "number_through_order": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("number_through_order"), _encode_int, _decode_int
+    ),
+    "game_date": _ContextFieldSpec(
+        FLOAT32_DTYPE, attrgetter("game_date"), _encode_game_date, _decode_game_date
+    ),
+    "fielder_2_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("fielder_2_id"), _encode_int, _decode_int
+    ),
+    "fielder_3_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("fielder_3_id"), _encode_int, _decode_int
+    ),
+    "fielder_4_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("fielder_4_id"), _encode_int, _decode_int
+    ),
+    "fielder_5_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("fielder_5_id"), _encode_int, _decode_int
+    ),
+    "fielder_6_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("fielder_6_id"), _encode_int, _decode_int
+    ),
+    "fielder_7_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("fielder_7_id"), _encode_int, _decode_int
+    ),
+    "fielder_8_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("fielder_8_id"), _encode_int, _decode_int
+    ),
+    "fielder_9_id": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("fielder_9_id"), _encode_int, _decode_int
+    ),
+    "batter_days_since_prev_game": _ContextFieldSpec(
+        INT32_DTYPE, attrgetter("batter_days_since_prev_game"), _encode_int, _decode_int
+    ),
+    "pitcher_days_since_prev_game": _ContextFieldSpec(
+        INT32_DTYPE,
+        attrgetter("pitcher_days_since_prev_game"),
+        _encode_int,
+        _decode_int,
+    ),
+    "strike_zone_top": _ContextFieldSpec(
+        FLOAT32_DTYPE,
+        attrgetter("strike_zone_top"),
+        _encode_strike_zone_top,
+        _decode_strike_zone_top,
+    ),
+    "strike_zone_bottom": _ContextFieldSpec(
+        FLOAT32_DTYPE,
+        attrgetter("strike_zone_bottom"),
+        _encode_strike_zone_bottom,
+        _decode_strike_zone_bottom,
+    ),
+}  # keep parallel with dataset.PackedPitchChunk but without x and y
 
 
 def _context_field_path(prefix: str, field_name: str) -> str:
@@ -269,7 +350,7 @@ def _write_context_files(contexts: list[PitchContext], prefix: str) -> list[str]
             logger.info(f"Number of fielder 8s: {len(fielder_8s)}")
         if field_name == "fielder_9_id":
             logger.info(f"Number of fielder 9s: {len(fielder_9s)}")
-            
+
     return saved_paths
 
 
@@ -295,7 +376,9 @@ def _write_dataset_files(
     return _write_context_files(list(contexts), path_context_prefix)
 
 
-def _log_dataset_write(label: str, path_tokens: str, context_paths: list[str], token_count: int) -> None:
+def _log_dataset_write(
+    label: str, path_tokens: str, context_paths: list[str], token_count: int
+) -> None:
     total_size = 0.0
     for path in context_paths + [path_tokens]:
         if os.path.exists(path):
@@ -336,7 +419,9 @@ def _session_spans(tokens: Sequence[PitchToken]) -> list[tuple[int, int]]:
     return spans
 
 
-def _compute_split_targets(total_tokens: int, val_ratio: float, test_ratio: float) -> tuple[int, int]:
+def _compute_split_targets(
+    total_tokens: int, val_ratio: float, test_ratio: float
+) -> tuple[int, int]:
     val_target = max(0, int(round(total_tokens * val_ratio)))
     test_target = max(0, int(round(total_tokens * test_ratio)))
 
@@ -436,7 +521,9 @@ def _read_context_files(sample_count: int, prefix: str) -> list[PitchContext]:
                 raise ValueError(
                     f"{path} has {file_size} bytes but expected {expected_size} for {sample_count} samples"
                 )
-            field_arrays[field_name] = np.memmap(path, dtype=spec.dtype, mode="r", shape=(sample_count,))
+            field_arrays[field_name] = np.memmap(
+                path, dtype=spec.dtype, mode="r", shape=(sample_count,)
+            )
 
         for idx in range(sample_count):
             kwargs = {
@@ -465,7 +552,9 @@ class PitchDataset(Dataset):
         dataset_log_interval: int = 10000,
     ) -> None:
         if len(pitch_tokens) != len(pitch_contexts):
-            raise ValueError(f"pitch_tokens and pitch_contexts must have the same length (got {len(pitch_tokens)} tokens vs {len(pitch_contexts)} contexts)")
+            raise ValueError(
+                f"pitch_tokens and pitch_contexts must have the same length (got {len(pitch_tokens)} tokens vs {len(pitch_contexts)} contexts)"
+            )
 
         self.pad_id = pad_id
         self.seed = seed
@@ -475,7 +564,9 @@ class PitchDataset(Dataset):
         self._pitch_tokens = pitch_tokens
         self._pitch_contexts = pitch_contexts
 
-        self.plate_appearances, self.samples = self._make_samples(pitch_tokens, pitch_contexts)
+        self.plate_appearances, self.samples = self._make_samples(
+            pitch_tokens, pitch_contexts
+        )
         # if not self.samples:
         #     raise ValueError("no plate appearances with at least two pitches were found")
         # first_seq, _ = self[0]
@@ -506,7 +597,9 @@ class PitchDataset(Dataset):
         if token_count == 0:
             pitch_tokens: list[PitchToken] = []
         else:
-            token_memmap = np.memmap(path_tokens, dtype=TOKEN_DTYPE, mode="r", shape=(token_count,))
+            token_memmap = np.memmap(
+                path_tokens, dtype=TOKEN_DTYPE, mode="r", shape=(token_count,)
+            )
             try:
                 pitch_tokens = [PitchToken(int(value)) for value in token_memmap]
             finally:
@@ -520,7 +613,9 @@ class PitchDataset(Dataset):
                 f"does not match token length ({len(pitch_tokens)})"
             )
 
-        return PitchDataset(pitch_tokens, pitch_contexts, seed, pad_id, dataset_log_interval)
+        return PitchDataset(
+            pitch_tokens, pitch_contexts, seed, pad_id, dataset_log_interval
+        )
 
     def save(
         self,
@@ -544,8 +639,15 @@ class PitchDataset(Dataset):
         test_ratio = max(0.0, float(split_test_ratio))
 
         if val_ratio == 0.0 and test_ratio == 0.0:
-            saved_context_paths = _write_dataset_files(self._pitch_tokens, self._pitch_contexts, path_tokens, path_context_prefix)
-            _log_dataset_write("train", path_tokens, saved_context_paths, len(self._pitch_tokens))
+            saved_context_paths = _write_dataset_files(
+                self._pitch_tokens,
+                self._pitch_contexts,
+                path_tokens,
+                path_context_prefix,
+            )
+            _log_dataset_write(
+                "train", path_tokens, saved_context_paths, len(self._pitch_tokens)
+            )
             return
 
         splits = _split_tokens_and_contexts(
@@ -567,7 +669,9 @@ class PitchDataset(Dataset):
             str(tokens_path_obj),
             str(context_prefix_obj),
         )
-        _log_dataset_write("train", str(tokens_path_obj), train_context_paths, len(train_tokens))
+        _log_dataset_write(
+            "train", str(tokens_path_obj), train_context_paths, len(train_tokens)
+        )
 
         if val_ratio > 0.0:
             val_dir = _prepare_split_directory(base_dir, "val", split_overwrite)
@@ -580,7 +684,9 @@ class PitchDataset(Dataset):
                 str(val_tokens_path),
                 str(val_context_prefix),
             )
-            _log_dataset_write("val", str(val_tokens_path), val_context_paths, len(val_tokens))
+            _log_dataset_write(
+                "val", str(val_tokens_path), val_context_paths, len(val_tokens)
+            )
 
         if test_ratio > 0.0:
             test_dir = _prepare_split_directory(base_dir, "test", split_overwrite)
@@ -593,7 +699,9 @@ class PitchDataset(Dataset):
                 str(test_tokens_path),
                 str(test_context_prefix),
             )
-            _log_dataset_write("test", str(test_tokens_path), test_context_paths, len(test_tokens))
+            _log_dataset_write(
+                "test", str(test_tokens_path), test_context_paths, len(test_tokens)
+            )
 
         logger.info(
             "Completed in-memory split: train=%d tokens, val=%d tokens, test=%d tokens",
@@ -621,7 +729,9 @@ class PitchDataset(Dataset):
         self,
         pitch_tokens: list[PitchToken],
         pitch_contexts: list[PitchContext],
-    ) -> tuple[list[tuple[list[PitchToken], list[PitchContext]]], list[tuple[int, int]]]:
+    ) -> tuple[
+        list[tuple[list[PitchToken], list[PitchContext]]], list[tuple[int, int]]
+    ]:
         """
         Build (sequence, label) pairs from plate appearances while minimizing memory use.
         """
@@ -645,13 +755,17 @@ class PitchDataset(Dataset):
             pa_contexts.append(context)
 
             if token == PitchToken.PA_END:
-                self._finalize_plate_appearance(pa_tokens, pa_contexts, plate_appearances, samples)
+                self._finalize_plate_appearance(
+                    pa_tokens, pa_contexts, plate_appearances, samples
+                )
                 pa_tokens = []
                 pa_contexts = []
 
         # handle trailing tokens if a PA_END was missing at the end of the stream
         if pa_tokens:
-            self._finalize_plate_appearance(pa_tokens, pa_contexts, plate_appearances, samples)
+            self._finalize_plate_appearance(
+                pa_tokens, pa_contexts, plate_appearances, samples
+            )
 
         logger.info("_make_samples completed successfully")
         return plate_appearances, samples
@@ -674,7 +788,6 @@ class PitchDataset(Dataset):
         plate_appearances.append((tokens, contexts))
         for end_idx in range(1, len(tokens)):
             samples.append((pa_idx, end_idx))
-
 
     def _token_to_feature(
         self,
@@ -704,7 +817,10 @@ class PitchDataset(Dataset):
         seq_contexts = contexts[:end_idx]
 
         seq_features = torch.stack(
-            [self._token_to_feature(tok, ctx) for tok, ctx in zip(seq_tokens, seq_contexts)]
+            [
+                self._token_to_feature(tok, ctx)
+                for tok, ctx in zip(seq_tokens, seq_contexts)
+            ]
         )
         target_token = tokens[end_idx]
         label = torch.tensor(self.pitch_vocab[target_token], dtype=torch.long)
@@ -741,8 +857,7 @@ class DeepPitcherModel(nn.Module):
         )
         out_dim = hidden_size * (2 if bidirectional else 1)
         self.classifier = nn.Sequential(
-            nn.Dropout(0.3),
-            nn.Linear(out_dim, num_classes)
+            nn.Dropout(0.3), nn.Linear(out_dim, num_classes)
         )
 
     def forward(
@@ -761,11 +876,19 @@ class DeepPitcherModel(nn.Module):
             logits: (B, num_classes)
         """
         emb = self.input_proj(x)
-        packed = pack_padded_sequence(emb, lengths.cpu(), batch_first=True, enforce_sorted=True)
+        packed = pack_padded_sequence(
+            emb, lengths.cpu(), batch_first=True, enforce_sorted=True
+        )
         packed_out, (h_n, c_n) = self.lstm(packed)
 
         out_unpacked, out_lengths = pad_packed_sequence(packed_out, batch_first=True)
-        idx = (out_lengths - 1).unsqueeze(1).unsqueeze(2).expand(out_unpacked.size(0), 1, out_unpacked.size(2)).to(x.device)
+        idx = (
+            (out_lengths - 1)
+            .unsqueeze(1)
+            .unsqueeze(2)
+            .expand(out_unpacked.size(0), 1, out_unpacked.size(2))
+            .to(x.device)
+        )
         last_valid = out_unpacked.gather(1, idx).squeeze(1)
 
         logits = self.classifier(last_valid)

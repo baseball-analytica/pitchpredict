@@ -2,7 +2,7 @@
 
 PitchPredict is cutting-edge MLB pitch prediction software that predicts pitcher and batter behavior using Statcast data. Open-source and free to use.
 
-**Version:** 0.3.0
+**Version:** 0.4.0
 **License:** MIT
 **Author:** Addison Kline (akline@baseball-analytica.com)
 
@@ -16,12 +16,14 @@ PitchPredict is cutting-edge MLB pitch prediction software that predicts pitcher
 - [REST API Reference](rest-api.md) - FastAPI server endpoints
 - [CLI Reference](cli.md) - Command-line interface
 - [Algorithms](algorithms.md) - Similarity and deep learning algorithms
+- [Caching](caching.md) - Cache behavior and storage layout
 
 ## Features
 
 - **Two prediction algorithms**: Similarity-based (nearest neighbor) and deep learning (xLSTM)
 - **Multiple interfaces**: Python API, REST API server, and CLI
 - **Rich data output**: Pitch type probabilities, speed/location distributions, outcome predictions
+- **Disk-backed caching**: Parquet cache with incremental Statcast updates
 - **Statcast integration**: Uses MLB's Statcast data via [pybaseball](https://github.com/jldbc/pybaseball)
 
 ## Basic Usage
@@ -41,18 +43,26 @@ from pitchpredict import PitchPredict
 async def main():
     client = PitchPredict()
     result = await client.predict_pitcher(
-        pitcher_name="Clayton Kershaw",
-        batter_name="Aaron Judge",
-        balls=0,
-        strikes=0,
+        pitcher_id=await client.get_player_id_from_name("Clayton Kershaw"),
+        batter_id=await client.get_player_id_from_name("Aaron Judge"),
+        count_balls=0,
+        count_strikes=0,
         score_bat=0,
         score_fld=0,
         game_date="2024-06-15",
         algorithm="similarity"
     )
-    print(result["basic_pitch_data"])
+    print(result.basic_pitch_data)
 
 asyncio.run(main())
+```
+
+### CLI
+
+```bash
+pitchpredict player lookup "Aaron Judge"
+pitchpredict predict pitcher "Zack Wheeler" "Juan Soto" --balls 1 --strikes 2
+pitchpredict cache status
 ```
 
 ### REST API Server

@@ -9,6 +9,7 @@ class Pitch(BaseModel):
     """
     An individual pitch that can be included in a larger sequence.
     """
+
     pitch_type: str
     speed: float
     spin_rate: float
@@ -31,16 +32,19 @@ class PredictPitcherRequest(BaseModel):
     """
     Common type for all pitcher prediction API requests.
     """
+
     pitcher_id: int
     batter_id: int
     prev_pitches: list[Pitch] | None = None
     algorithm: str = "similarity"
-    sample_size: int = 1 # how many pitches should the algorithm generate?
+    sample_size: int = 1  # how many pitches should the algorithm generate?
     # optional context fields
     pitcher_age: int | None = None
     pitcher_throws: Literal["L", "R"] | None = None
     batter_age: int | None = None
-    batter_hits: Literal["L", "R"] | None = None # if the batter is a switch hitter, they will still be on just one side of the plate
+    batter_hits: Literal["L", "R"] | None = (
+        None  # if the batter is a switch hitter, they will still be on just one side of the plate
+    )
     count_balls: int | None = None
     count_strikes: int | None = None
     outs: int | None = None
@@ -69,6 +73,7 @@ class PredictPitcherResponse(BaseModel):
     """
     Common type for all pitcher prediction API responses.
     """
+
     basic_pitch_data: dict[str, Any]
     detailed_pitch_data: dict[str, Any]
     basic_outcome_data: dict[str, Any]
@@ -118,3 +123,13 @@ class PredictBattedBallResponse(BaseModel):
     detailed_outcome_data: dict[str, Any]
     prediction_metadata: dict[str, Any]
 
+
+class PlayerLookupResponse(BaseModel):
+    query: str
+    fuzzy: bool
+    results: list[dict[str, Any]]
+
+
+class PlayerRecordResponse(BaseModel):
+    mlbam_id: int
+    record: dict[str, Any]

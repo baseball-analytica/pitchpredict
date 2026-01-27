@@ -105,13 +105,16 @@ def test_sample_pitches_uses_description_when_events_missing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_cached_pitches_for_pitcher_reuses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_cached_pitches_for_pitcher_reuses_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[dict[str, object]] = []
 
     async def fake_get_pitches_from_pitcher(
         pitcher_id: int,
         start_date: str,
         end_date: str | None = None,
+        cache: object | None = None,
     ) -> pd.DataFrame:
         calls.append(
             {
@@ -127,7 +130,9 @@ async def test_get_cached_pitches_for_pitcher_reuses_cache(monkeypatch: pytest.M
             ]
         )
 
-    monkeypatch.setattr(similarity_base, "get_pitches_from_pitcher", fake_get_pitches_from_pitcher)
+    monkeypatch.setattr(
+        similarity_base, "get_pitches_from_pitcher", fake_get_pitches_from_pitcher
+    )
 
     algorithm = SimilarityAlgorithm()
     first = await algorithm._get_cached_pitches_for_pitcher(

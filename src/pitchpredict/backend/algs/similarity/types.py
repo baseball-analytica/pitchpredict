@@ -12,6 +12,7 @@ class SimilarityWeights(BaseModel):
     Weights for the similarity algorithm.
     Since this will be softmaxed, the weights do not need to sum to 1.
     """
+
     batter_id: float = 1.0
     pitcher_age: float = 0.6
     pitcher_throws: float = 0.4

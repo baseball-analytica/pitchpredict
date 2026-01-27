@@ -1,23 +1,91 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Addison Kline
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
+from datetime import datetime
 import logging
 
 from fastapi import HTTPException
 import pandas as pd
-import pybaseball # type: ignore
-from tqdm import tqdm
+import pybaseball  # type: ignore
+
+from pitchpredict.backend.caching import PitchPredictCache
 
 logger = logging.getLogger("pitchpredict.backend.fetching")
+
+
+def _filter_pitches_by_range(
+    pitches: pd.DataFrame, start_date: str, end_date: str
+) -> pd.DataFrame:
+    """Return a view of pitches within the requested date range."""
+    if "game_date_dt" in pitches.columns:
+        dates = pitches["game_date_dt"]
+    elif "game_date" in pitches.columns:
+        dates = pd.to_datetime(pitches["game_date"], errors="coerce")
+    else:
+        return pitches.copy(deep=False)
+    start_ts = pd.Timestamp(start_date)
+    end_ts = pd.Timestamp(end_date)
+    mask = (dates >= start_ts) & (dates <= end_ts)
+    return pitches.loc[mask].copy(deep=False)
+
+
+def _ensure_game_date_dt(pitches: pd.DataFrame) -> pd.DataFrame:
+    """Add a parsed game_date_dt column when possible."""
+    if "game_date" not in pitches.columns:
+        return pitches
+    if "game_date_dt" not in pitches.columns:
+        pitches = pitches.copy(deep=False)
+        pitches["game_date_dt"] = pd.to_datetime(pitches["game_date"], errors="coerce")
+        return pitches
+    if pitches["game_date_dt"].isna().any():
+        pitches = pitches.copy(deep=False)
+        missing = pitches["game_date_dt"].isna()
+        if missing.any():
+            pitches.loc[missing, "game_date_dt"] = pd.to_datetime(
+                pitches.loc[missing, "game_date"], errors="coerce"
+            )
+    return pitches
+
+
+def _select_columns(
+    pitches: pd.DataFrame, columns: list[str] | None
+) -> pd.DataFrame:
+    """Select available columns from pitches when a subset is requested."""
+    if not columns:
+        return pitches
+    available = [column for column in columns if column in pitches.columns]
+    if not available:
+        return pitches
+    return pitches.loc[:, available]
+
+
+def _coerce_record_value(value: object) -> object:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (pd.Timestamp, datetime)):
+        return value.isoformat()
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def _records_from_player_df(player_ids: pd.DataFrame) -> list[dict[str, object]]:
+    records = player_ids.where(pd.notna(player_ids), None).to_dict(orient="records")
+    return [
+        {str(key): _coerce_record_value(value) for key, value in record.items()}
+        for record in records
+    ]
 
 
 async def get_pitches_from_pitcher(
     pitcher_id: int,
     start_date: str,
     end_date: str | None = None,
+    columns: list[str] | None = None,
+    cache: PitchPredictCache | None = None,
 ) -> pd.DataFrame:
     """
     Given a pitcher's MLBAM ID, get a list of all their pitches thrown between `start_date` and `end_date`.
@@ -27,6 +95,7 @@ async def get_pitches_from_pitcher(
         pitcher_id: The MLBAM ID of the pitcher.
         start_date: The start date of the period to get pitches for.
         end_date: The end date of the period to get pitches for.
+        columns: Optional list of columns to return.
 
     Returns:
         A pandas DataFrame containing the pitches thrown by the pitcher.
@@ -37,6 +106,59 @@ async def get_pitches_from_pitcher(
         logger.debug("end_date is None, using current date")
         end_date = datetime.now().strftime("%Y-%m-%d")
 
+    if cache is not None:
+        cached = cache.get_pitcher_pitches(
+            pitcher_id=pitcher_id, end_date=end_date, columns=columns
+        )
+        if cached is not None:
+            return _filter_pitches_by_range(cached, start_date, end_date)
+
+        cache_state = cache.get_pitcher_cache_state(pitcher_id=pitcher_id)
+        if cache_state is not None:
+            cached_data, cached_end_date = cache_state
+            try:
+                cached_end_ts = pd.Timestamp(cached_end_date)
+                requested_end_ts = pd.Timestamp(end_date)
+                requested_start_ts = pd.Timestamp(start_date)
+            except (TypeError, ValueError):
+                cached_end_ts = None
+            if (
+                cached_end_ts is not None
+                and requested_end_ts > cached_end_ts
+                and requested_start_ts <= cached_end_ts
+            ):
+                # Fetch only the missing tail of data and append to cache.
+                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime(
+                    "%Y-%m-%d"
+                )
+                try:
+                    logger.debug("fetching pitches from pitcher for cache append")
+                    new_pitches = pybaseball.statcast_pitcher(
+                        start_dt=fetch_start,
+                        end_dt=end_date,
+                        player_id=pitcher_id,
+                    )
+                except Exception as exc:
+                    logger.error(f"encountered Exception: {exc}")
+                    raise HTTPException(status_code=500, detail=str(exc))
+
+                if new_pitches.empty:
+                    logger.debug(
+                        "no new pitches found for pitcher %s between %s and %s",
+                        pitcher_id,
+                        fetch_start,
+                        end_date,
+                    )
+                    combined = cached_data
+                else:
+                    combined = pd.concat([cached_data, new_pitches], ignore_index=True)
+                combined = _ensure_game_date_dt(combined)
+                cache.set_pitcher_pitches(
+                    pitcher_id=pitcher_id, end_date=end_date, pitches=combined
+                )
+                combined = _select_columns(combined, columns)
+                return _filter_pitches_by_range(combined, start_date, end_date)
+
     try:
         logger.debug("fetching pitches from pitcher")
         pitches = pybaseball.statcast_pitcher(
@@ -46,10 +168,21 @@ async def get_pitches_from_pitcher(
         )
 
         if pitches.empty:
-            logger.error(f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}")
+            logger.error(
+                f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}"
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"no pitches found for pitcher with ID {pitcher_id} between {start_date} and {end_date}",
+            )
 
         logger.debug("pitches fetched successfully")
+        pitches = _ensure_game_date_dt(pitches)
+        if cache is not None:
+            cache.set_pitcher_pitches(
+                pitcher_id=pitcher_id, end_date=end_date, pitches=pitches
+            )
+        pitches = _select_columns(pitches, columns)
         return pitches
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -63,6 +196,8 @@ async def get_pitches_to_batter(
     batter_id: int,
     start_date: str,
     end_date: str | None = None,
+    columns: list[str] | None = None,
+    cache: PitchPredictCache | None = None,
 ) -> pd.DataFrame:
     """
     Given a batter's MLBAM ID, get a list of all the pitches thrown to them between `start_date` and `end_date`.
@@ -73,6 +208,56 @@ async def get_pitches_to_batter(
         logger.debug("end_date is None, using current date")
         end_date = datetime.now().strftime("%Y-%m-%d")
 
+    if cache is not None:
+        cached = cache.get_batter_pitches(
+            batter_id=batter_id, end_date=end_date, columns=columns
+        )
+        if cached is not None:
+            return _filter_pitches_by_range(cached, start_date, end_date)
+
+        cache_state = cache.get_batter_cache_state(batter_id=batter_id)
+        if cache_state is not None:
+            cached_data, cached_end_date = cache_state
+            try:
+                cached_end_ts = pd.Timestamp(cached_end_date)
+                requested_end_ts = pd.Timestamp(end_date)
+                requested_start_ts = pd.Timestamp(start_date)
+            except (TypeError, ValueError):
+                cached_end_ts = None
+            if (
+                cached_end_ts is not None
+                and requested_end_ts > cached_end_ts
+                and requested_start_ts <= cached_end_ts
+            ):
+                # Fetch only the missing tail of data and append to cache.
+                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime(
+                    "%Y-%m-%d"
+                )
+                try:
+                    logger.debug("fetching pitches to batter for cache append")
+                    new_pitches = pybaseball.statcast_batter(
+                        start_dt=fetch_start,
+                        end_dt=end_date,
+                        player_id=batter_id,
+                    )
+                except Exception as exc:
+                    logger.error(f"encountered Exception: {exc}")
+                    raise HTTPException(status_code=500, detail=str(exc))
+
+                if new_pitches.empty:
+                    logger.debug(
+                        f"no new pitches found for batter {batter_id} between {fetch_start} and {end_date}"
+                    )
+                    combined = cached_data
+                else:
+                    combined = pd.concat([cached_data, new_pitches], ignore_index=True)
+                combined = _ensure_game_date_dt(combined)
+                cache.set_batter_pitches(
+                    batter_id=batter_id, end_date=end_date, pitches=combined
+                )
+                combined = _select_columns(combined, columns)
+                return _filter_pitches_by_range(combined, start_date, end_date)
+
     try:
         logger.debug("fetching pitches to batter")
         pitches = pybaseball.statcast_batter(
@@ -82,10 +267,21 @@ async def get_pitches_to_batter(
         )
 
         if pitches.empty:
-            logger.error(f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}")
+            logger.error(
+                f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}"
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"no pitches found for batter with ID {batter_id} between {start_date} and {end_date}",
+            )
 
         logger.debug("pitches fetched successfully")
+        pitches = _ensure_game_date_dt(pitches)
+        if cache is not None:
+            cache.set_batter_pitches(
+                batter_id=batter_id, end_date=end_date, pitches=pitches
+            )
+        pitches = _select_columns(pitches, columns)
         return pitches
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -98,6 +294,7 @@ async def get_pitches_to_batter(
 async def get_player_id_from_name(
     player_name: str,
     fuzzy_lookup: bool = True,
+    cache: PitchPredictCache | None = None,
 ) -> int:
     """
     Given a player's name, get their MLBAM ID.
@@ -107,18 +304,117 @@ async def get_player_id_from_name(
     try:
         last_name, first_name = _parse_player_name(player_name)
         logger.debug(f"parsed player name: {last_name}, {first_name}")
+        if cache is not None:
+            cached = cache.get_player_id(
+                player_name=player_name, fuzzy_lookup=fuzzy_lookup
+            )
+            if cached is not None:
+                return cached
         player_ids = pybaseball.playerid_lookup(
-            last_name,
-            first_name,
-            fuzzy=fuzzy_lookup
+            last_name, first_name, fuzzy=fuzzy_lookup
         )
 
         if player_ids.empty:
             logger.error(f"no player found with name {player_name}")
-            raise HTTPException(status_code=404, detail=f"no player found with name {player_name}")
+            raise HTTPException(
+                status_code=404, detail=f"no player found with name {player_name}"
+            )
 
-        logger.info(f"player ID fetched successfully for {player_name}: {player_ids.iloc[0]['key_mlbam']}")
-        return player_ids.iloc[0]["key_mlbam"]
+        player_id = int(player_ids.iloc[0]["key_mlbam"])
+        logger.info(f"player ID fetched successfully for {player_name}: {player_id}")
+        if cache is not None:
+            cache.set_player_id(
+                player_name=player_name, player_id=player_id, fuzzy_lookup=fuzzy_lookup
+            )
+        return player_id
+    except HTTPException as e:
+        logger.error(f"encountered HTTPException: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"encountered Exception: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def get_player_records_from_name(
+    player_name: str,
+    fuzzy_lookup: bool = True,
+    limit: int = 1,
+    cache: PitchPredictCache | None = None,
+) -> list[dict[str, object]]:
+    """
+    Given a player's name, return matching player records from pybaseball.
+    """
+    logger.debug("get_player_records_from_name called")
+
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="limit must be >= 1")
+
+    try:
+        last_name, first_name = _parse_player_name(player_name)
+        logger.debug(f"parsed player name: {last_name}, {first_name}")
+        if cache is not None:
+            cached = cache.get_player_records(
+                player_name=player_name, fuzzy_lookup=fuzzy_lookup
+            )
+            if cached is not None:
+                return cached[:limit]
+
+        player_ids = pybaseball.playerid_lookup(
+            last_name, first_name, fuzzy=fuzzy_lookup
+        )
+
+        if player_ids.empty:
+            logger.error(f"no player found with name {player_name}")
+            raise HTTPException(
+                status_code=404, detail=f"no player found with name {player_name}"
+            )
+
+        records = _records_from_player_df(player_ids)
+        if cache is not None:
+            cache.set_player_records(
+                player_name=player_name, fuzzy_lookup=fuzzy_lookup, records=records
+            )
+        return records[:limit]
+    except HTTPException as e:
+        logger.error(f"encountered HTTPException: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"encountered Exception: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def get_player_record_from_id(
+    mlbam_id: int,
+    cache: PitchPredictCache | None = None,
+) -> dict[str, object]:
+    """
+    Given an MLBAM ID, return the full pybaseball player record.
+    """
+    logger.debug("get_player_record_from_id called")
+
+    if cache is not None:
+        cached = cache.get_player_record_by_id(mlbam_id=mlbam_id)
+        if cached is not None:
+            return cached
+
+    try:
+        if not hasattr(pybaseball, "playerid_reverse_lookup"):
+            raise HTTPException(
+                status_code=500,
+                detail="pybaseball.playerid_reverse_lookup is unavailable",
+            )
+
+        player_ids = pybaseball.playerid_reverse_lookup([mlbam_id])
+        if player_ids.empty:
+            logger.error(f"no player found with id {mlbam_id}")
+            raise HTTPException(
+                status_code=404, detail=f"no player found with id {mlbam_id}"
+            )
+
+        record = _records_from_player_df(player_ids)[0]
+        if cache is not None:
+            cache.set_player_record_by_id(mlbam_id=mlbam_id, record=record)
+        return record
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
         raise e
@@ -130,49 +426,51 @@ async def get_player_id_from_name(
 def _parse_player_name(name: str) -> tuple[str, str]:
     """
     Parse the given player's name: "First Last" -> ("Last", "First").
+    Supports compound last names and suffixes (e.g., "Bobby Witt Jr.").
     """
     logger.debug("parse_player_name called")
 
-    name_split = name.split(" ")
-    if len(name_split) != 2:
-        logger.error(f"player name must be in the format 'First Last': {name}")
-        raise HTTPException(status_code=400, detail="player name must be in the format 'First Last'")
+    cleaned = " ".join(name.strip().split())
+    if not cleaned:
+        logger.error("player name is empty")
+        raise HTTPException(
+            status_code=400, detail="player name must include first and last name"
+        )
 
-    logger.debug(f"parsed player name: {name_split[1]}, {name_split[0]}")
-    return name_split[1], name_split[0]
+    if "," in cleaned:
+        last_name, first_name = [part.strip() for part in cleaned.split(",", 1)]
+        if not last_name or not first_name:
+            logger.error(f"player name must include first and last name: {name}")
+            raise HTTPException(
+                status_code=400, detail="player name must include first and last name"
+            )
+        logger.debug(f"parsed player name: {last_name}, {first_name}")
+        return last_name, first_name
+
+    name_split = cleaned.split(" ")
+    if len(name_split) < 2:
+        logger.error(f"player name must include first and last name: {name}")
+        raise HTTPException(
+            status_code=400, detail="player name must include first and last name"
+        )
+
+    first_name = name_split[0]
+    last_name = " ".join(name_split[1:])
+    logger.debug(f"parsed player name: {last_name}, {first_name}")
+    return last_name, first_name
 
 
 async def get_all_pitches(
     start_date: str,
     end_date: str,
-    parallel: bool = True,
-    max_workers: int = 8,
-    chunk_months: int = 2,
 ) -> pd.DataFrame:
     """
     Get all pitches thrown between `start_date` and `end_date`.
-
-    Args:
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD)
-        parallel: If True, fetch date chunks in parallel (faster)
-        max_workers: Number of parallel fetch threads
-        chunk_months: Size of each chunk in months (default 2)
-
-    Returns:
-        DataFrame with all pitches
     """
     logger.debug("get_all_pitches called")
 
-    if parallel:
-        return await get_all_pitches_parallel(
-            start_date, end_date,
-            max_workers=max_workers,
-            chunk_months=chunk_months
-        )
-
     try:
-        logger.debug("fetching all pitches (sequential)")
+        logger.debug("fetching all pitches")
         pitches = pybaseball.statcast(
             start_dt=start_date,
             end_dt=end_date,
@@ -180,7 +478,10 @@ async def get_all_pitches(
 
         if pitches.empty:
             logger.error(f"no pitches found between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no pitches found between {start_date} and {end_date}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"no pitches found between {start_date} and {end_date}",
+            )
 
         logger.debug("pitches fetched successfully")
         return pitches
@@ -196,6 +497,8 @@ async def get_all_batted_balls(
     start_date: str | None = None,
     end_date: str | None = None,
     n_seasons: int = 3,
+    columns: list[str] | None = None,
+    cache: PitchPredictCache | None = None,
 ) -> pd.DataFrame:
     """
     Get all batted ball events from Statcast data.
@@ -204,6 +507,7 @@ async def get_all_batted_balls(
         start_date: The start date of the period to get batted balls for. If None, defaults to n_seasons ago.
         end_date: The end date of the period to get batted balls for. If None, defaults to current date.
         n_seasons: Number of seasons to fetch if start_date is not provided (default: 3).
+        columns: Optional list of columns to return.
 
     Returns:
         A pandas DataFrame containing batted ball events with launch_speed and launch_angle data.
@@ -219,6 +523,65 @@ async def get_all_batted_balls(
         start_year = current_year - n_seasons
         start_date = f"{start_year}-03-01"
 
+    if cache is not None:
+        cached = cache.get_batted_balls(
+            start_date=start_date, end_date=end_date, columns=columns
+        )
+        if cached is not None:
+            return cached
+
+        cache_state = cache.get_batted_balls_cache_state()
+        if cache_state is not None:
+            cached_data, cached_start, cached_end = cache_state
+            try:
+                cached_start_ts = pd.Timestamp(cached_start)
+                cached_end_ts = pd.Timestamp(cached_end)
+                requested_start_ts = pd.Timestamp(start_date)
+                requested_end_ts = pd.Timestamp(end_date)
+            except (TypeError, ValueError):
+                cached_end_ts = None
+            if (
+                cached_end_ts is not None
+                and requested_start_ts >= cached_start_ts
+                and requested_end_ts > cached_end_ts
+            ):
+                # Extend cached range by fetching only missing data.
+                fetch_start = (cached_end_ts + pd.Timedelta(days=1)).strftime(
+                    "%Y-%m-%d"
+                )
+                try:
+                    logger.debug("fetching batted balls for cache append")
+                    pitches = pybaseball.statcast(
+                        start_dt=fetch_start,
+                        end_dt=end_date,
+                    )
+                except Exception as exc:
+                    logger.error(f"encountered Exception: {exc}")
+                    raise HTTPException(status_code=500, detail=str(exc))
+
+                if pitches.empty:
+                    logger.debug(
+                        "no new batted balls found between %s and %s",
+                        fetch_start,
+                        end_date,
+                    )
+                    combined = cached_data
+                else:
+                    batted_balls = pitches[
+                        (pitches["type"] == "X")
+                        & (pitches["launch_speed"].notna())
+                        & (pitches["launch_angle"].notna())
+                    ].copy()
+                    combined = pd.concat([cached_data, batted_balls], ignore_index=True)
+                combined = _ensure_game_date_dt(combined)
+                cache.set_batted_balls(
+                    start_date=cached_start,
+                    end_date=end_date,
+                    batted_balls=combined,
+                )
+                combined = _select_columns(combined, columns)
+                return _filter_pitches_by_range(combined, start_date, end_date)
+
     try:
         logger.debug(f"fetching batted balls from {start_date} to {end_date}")
         pitches = pybaseball.statcast(
@@ -228,20 +591,34 @@ async def get_all_batted_balls(
 
         if pitches.empty:
             logger.error(f"no data found between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no data found between {start_date} and {end_date}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"no data found between {start_date} and {end_date}",
+            )
 
         # Filter to only batted ball events (contact events with launch_speed and launch_angle)
         batted_balls = pitches[
-            (pitches["type"] == "X") &
-            (pitches["launch_speed"].notna()) &
-            (pitches["launch_angle"].notna())
+            (pitches["type"] == "X")
+            & (pitches["launch_speed"].notna())
+            & (pitches["launch_angle"].notna())
         ].copy()
 
         if batted_balls.empty:
-            logger.error(f"no batted ball events found between {start_date} and {end_date}")
-            raise HTTPException(status_code=404, detail=f"no batted ball events found between {start_date} and {end_date}")
+            logger.error(
+                f"no batted ball events found between {start_date} and {end_date}"
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"no batted ball events found between {start_date} and {end_date}",
+            )
 
-        logger.info(f"fetched {batted_balls.shape[0]} batted ball events successfully")
+        logger.debug(f"fetched {batted_balls.shape[0]} batted ball events successfully")
+        batted_balls = _ensure_game_date_dt(batted_balls)
+        if cache is not None:
+            cache.set_batted_balls(
+                start_date=start_date, end_date=end_date, batted_balls=batted_balls
+            )
+        batted_balls = _select_columns(batted_balls, columns)
         return batted_balls
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -249,108 +626,3 @@ async def get_all_batted_balls(
     except Exception as e:
         logger.error(f"encountered Exception: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-def _generate_date_chunks(
-    start_date: str,
-    end_date: str,
-    chunk_months: int = 2,
-) -> list[tuple[str, str]]:
-    """
-    Split a date range into chunks of approximately chunk_months months.
-
-    Returns list of (start, end) date string tuples.
-    """
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
-
-    chunks = []
-    current = start
-
-    while current < end:
-        chunk_end = current + relativedelta(months=chunk_months) - timedelta(days=1)
-        if chunk_end > end:
-            chunk_end = end
-
-        chunks.append((
-            current.strftime("%Y-%m-%d"),
-            chunk_end.strftime("%Y-%m-%d")
-        ))
-
-        current = chunk_end + timedelta(days=1)
-
-    return chunks
-
-
-def _fetch_chunk(chunk: tuple[str, str]) -> pd.DataFrame:
-    """Fetch a single date chunk. Called from thread pool."""
-    start, end = chunk
-    try:
-        # Disable pybaseball's internal parallel (we're doing our own)
-        df = pybaseball.statcast(start_dt=start, end_dt=end, parallel=False)
-        return df
-    except Exception as e:
-        logger.warning(f"Failed to fetch chunk {start} to {end}: {e}")
-        return pd.DataFrame()
-
-
-async def get_all_pitches_parallel(
-    start_date: str,
-    end_date: str,
-    max_workers: int = 8,
-    chunk_months: int = 2,
-) -> pd.DataFrame:
-    """
-    Fetch all pitches in parallel by splitting into date chunks.
-
-    This is faster than pybaseball's default because we fetch multiple
-    month-sized chunks simultaneously, rather than sequential 5-day chunks.
-
-    Args:
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD)
-        max_workers: Number of parallel fetch threads (default 8)
-        chunk_months: Size of each chunk in months (default 2)
-
-    Returns:
-        DataFrame with all pitches, concatenated and deduplicated
-    """
-    chunks = _generate_date_chunks(start_date, end_date, chunk_months)
-    logger.info(f"Fetching {len(chunks)} chunks in parallel (max_workers={max_workers})")
-
-    results: list[pd.DataFrame] = []
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_fetch_chunk, chunk): chunk for chunk in chunks}
-
-        with tqdm(total=len(chunks), desc="Fetching pitch data") as pbar:
-            for future in as_completed(futures):
-                chunk = futures[future]
-                try:
-                    df = future.result()
-                    if not df.empty:
-                        results.append(df)
-                        logger.debug(f"Chunk {chunk[0]} to {chunk[1]}: {len(df)} pitches")
-                except Exception as e:
-                    logger.error(f"Chunk {chunk} failed: {e}")
-                pbar.update(1)
-
-    if not results:
-        raise HTTPException(
-            status_code=404,
-            detail=f"no pitches found between {start_date} and {end_date}"
-        )
-
-    # Concatenate all results
-    logger.info(f"Concatenating {len(results)} chunks...")
-    pitches = pd.concat(results, ignore_index=True)
-
-    # Drop duplicates (chunks might have slight overlap at boundaries)
-    initial_count = len(pitches)
-    pitches = pitches.drop_duplicates(subset=["game_pk", "at_bat_number", "pitch_number"])
-    dedup_count = initial_count - len(pitches)
-    if dedup_count > 0:
-        logger.info(f"Removed {dedup_count} duplicate rows")
-
-    logger.info(f"Fetched {len(pitches):,} total pitches")
-    return pitches

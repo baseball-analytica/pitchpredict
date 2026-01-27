@@ -28,10 +28,10 @@ async def main():
 
     # Predict a pitcher's next pitch
     result = await client.predict_pitcher(
-        pitcher_name="Clayton Kershaw",
-        batter_name="Aaron Judge",
-        balls=0,
-        strikes=0,
+        pitcher_id=await client.get_player_id_from_name("Clayton Kershaw"),
+        batter_id=await client.get_player_id_from_name("Aaron Judge"),
+        count_balls=0,
+        count_strikes=0,
         score_bat=0,
         score_fld=0,
         game_date="2024-06-15",
@@ -40,14 +40,37 @@ async def main():
 
     # View pitch type probabilities
     print("Pitch type probabilities:")
-    print(result["basic_pitch_data"]["pitch_type_probs"])
+    print(result.basic_pitch_data["pitch_type_probs"])
 
     # View outcome probabilities
     print("\nOutcome probabilities:")
-    print(result["basic_outcome_data"]["outcome_probs"])
+    print(result.basic_outcome_data["outcome_probs"])
 
 asyncio.run(main())
 ```
+
+Pitcher and batter IDs are MLBAM IDs; use `PitchPredict.get_player_id_from_name` as shown above to resolve names.
+Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
+
+## Quick Start: CLI
+
+Run predictions and player lookups without starting the server:
+
+```bash
+# Lookup player IDs
+pitchpredict player lookup "Aaron Judge"
+
+# Predict next pitch
+pitchpredict predict pitcher "Zack Wheeler" "Juan Soto" --balls 1 --strikes 2
+
+# Predict batter outcome given a pitch
+pitchpredict predict batter "Aaron Judge" "Gerrit Cole" FF 96.5 0.15 2.85
+
+# Predict batted-ball outcome
+pitchpredict predict batted-ball 102.3 24 --format json
+```
+
+Use `--verbose` for detailed tables and `--format json` for machine-readable output.
 
 ## Quick Start: REST API Server
 
@@ -62,13 +85,20 @@ The server runs on `http://localhost:8056` by default.
 Make a prediction request:
 
 ```bash
+curl "http://localhost:8056/players/lookup?name=Clayton%20Kershaw&fuzzy=true"
+curl "http://localhost:8056/players/lookup?name=Aaron%20Judge&fuzzy=true"
+```
+
+Use the returned `key_mlbam` values in the prediction request:
+
+```bash
 curl -X POST http://localhost:8056/predict/pitcher \
   -H "Content-Type: application/json" \
   -d '{
-    "pitcher_name": "Clayton Kershaw",
-    "batter_name": "Aaron Judge",
-    "balls": 0,
-    "strikes": 0,
+    "pitcher_id": 477132,
+    "batter_id": 592450,
+    "count_balls": 0,
+    "count_strikes": 0,
     "score_bat": 0,
     "score_fld": 0,
     "game_date": "2024-06-15",

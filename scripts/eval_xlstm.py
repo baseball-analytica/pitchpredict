@@ -157,16 +157,14 @@ def strip_compiled_prefix(state_dict: dict) -> dict:
     new_state_dict = {}
     for key, value in state_dict.items():
         if key.startswith("_orig_mod."):
-            new_key = key[len("_orig_mod."):]
+            new_key = key[len("_orig_mod.") :]
         else:
             new_key = key
         new_state_dict[new_key] = value
     return new_state_dict
 
 
-def load_checkpoint(
-    ckpt_path: str, device: torch.device
-) -> tuple[Config, dict]:
+def load_checkpoint(ckpt_path: str, device: torch.device) -> tuple[Config, dict]:
     """Load checkpoint and return config + state dict."""
     map_location = {"cuda:%d" % 0: "cuda:%d" % device.index}
     state = torch.load(ckpt_path, map_location=map_location, weights_only=False)
@@ -235,7 +233,7 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help='Glob pattern to find checkpoint files (e.g., "/raid/ckpts/*.pt"). '
-             'Not required if CHECKPOINT_LIST is set at the top of the script.',
+        "Not required if CHECKPOINT_LIST is set at the top of the script.",
     )
     parser.add_argument(
         "--data_dir",
@@ -299,7 +297,9 @@ def main() -> None:
         ckpt_paths = [p for p in CHECKPOINT_LIST if os.path.exists(p)]
         missing = [p for p in CHECKPOINT_LIST if not os.path.exists(p)]
         if missing:
-            print(f"Warning: {len(missing)} checkpoint(s) from CHECKPOINT_LIST not found:")
+            print(
+                f"Warning: {len(missing)} checkpoint(s) from CHECKPOINT_LIST not found:"
+            )
             for p in missing:
                 print(f"  - {p}")
         source = "CHECKPOINT_LIST"
@@ -324,7 +324,9 @@ def main() -> None:
     data_dir_used = None
 
     for i, ckpt_path in enumerate(ckpt_paths):
-        print(f"\n[{i+1}/{len(ckpt_paths)}] Evaluating: {os.path.basename(ckpt_path)}")
+        print(
+            f"\n[{i + 1}/{len(ckpt_paths)}] Evaluating: {os.path.basename(ckpt_path)}"
+        )
 
         try:
             # Load checkpoint
@@ -343,7 +345,9 @@ def main() -> None:
             data_dir_used = data_dir
 
             print(f"  Step: {step}")
-            print(f"  Model: d_model={cfg.d_model}, blocks={cfg.num_blocks}, heads={cfg.num_heads}")
+            print(
+                f"  Model: d_model={cfg.d_model}, blocks={cfg.num_blocks}, heads={cfg.num_heads}"
+            )
             print(f"  Batch size: {cfg.micro_batch_size}, Seq len: {cfg.seq_len}")
 
             model = build_model(cfg, device)
@@ -376,13 +380,15 @@ def main() -> None:
             print(f"  Test BPB: {bpb:.4f}")
 
             # Store result
-            results.append({
-                "checkpoint": ckpt_path,
-                "step": step,
-                "test_nll": nll,
-                "test_bpb": bpb,
-                "config": asdict(cfg),
-            })
+            results.append(
+                {
+                    "checkpoint": ckpt_path,
+                    "step": step,
+                    "test_nll": nll,
+                    "test_bpb": bpb,
+                    "config": asdict(cfg),
+                }
+            )
 
             # Log to wandb
             if args.run_id is not None:
@@ -397,6 +403,7 @@ def main() -> None:
         except Exception as e:
             print(f"  Error evaluating checkpoint: {e}")
             import traceback
+
             traceback.print_exc()
             continue
 

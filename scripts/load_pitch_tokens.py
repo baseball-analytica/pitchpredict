@@ -93,7 +93,9 @@ def main() -> None:
         return
 
     if args.chunk_index < 0 or args.chunk_index >= len(dataset):
-        raise IndexError(f"chunk_index {args.chunk_index} is out of bounds for dataset of size {len(dataset)}")
+        raise IndexError(
+            f"chunk_index {args.chunk_index} is out of bounds for dataset of size {len(dataset)}"
+        )
 
     chunk = dataset[args.chunk_index]
     steps = min(args.num_tokens, chunk.x.numel())
@@ -118,7 +120,7 @@ def main() -> None:
         except ValueError:
             target_str = f"{target_value}"
 
-        print(f"{idx+1:>4}: x={token_str} -> y={target_str}")
+        print(f"{idx + 1:>4}: x={token_str} -> y={target_str}")
         for field_name in _CONTEXT_FIELD_SPECS.keys():
             value = getattr(chunk, field_name)[idx].item()
             value = _CONTEXT_FIELD_SPECS[field_name].decode(value)
@@ -127,4 +129,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

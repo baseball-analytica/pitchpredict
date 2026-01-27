@@ -16,13 +16,17 @@ class _FakeAlgorithm:
         self.calls: list[api_types.PredictPitcherRequest] = []
         self._result = result
 
-    async def predict_pitcher(self, request: api_types.PredictPitcherRequest) -> dict[str, Any]:
+    async def predict_pitcher(
+        self, request: api_types.PredictPitcherRequest
+    ) -> dict[str, Any]:
         self.calls.append(request)
         return self._result
 
 
 @pytest.mark.asyncio
-async def test_predict_pitcher_builds_request_and_calls_algorithm(tmp_path: Any) -> None:
+async def test_predict_pitcher_builds_request_and_calls_algorithm(
+    tmp_path: Any,
+) -> None:
     expected = {
         "basic_pitch_data": {"pitch_type_probs": {}},
         "detailed_pitch_data": {},
@@ -36,7 +40,7 @@ async def test_predict_pitcher_builds_request_and_calls_algorithm(tmp_path: Any)
         enable_cache=False,
         enable_logging=True,
         log_dir=str(tmp_path),
-        algorithms={"similarity": fake_algorithm},
+        algorithms={"similarity": fake_algorithm},  # type: ignore
     )
 
     result = await api.predict_pitcher(
@@ -69,7 +73,7 @@ async def test_predict_pitcher_raises_for_unknown_algorithm(tmp_path: Any) -> No
         enable_cache=False,
         enable_logging=True,
         log_dir=str(tmp_path),
-        algorithms={"similarity": fake_algorithm},
+        algorithms={"similarity": fake_algorithm},  # type: ignore
     )
 
     with pytest.raises(HTTPException) as exc:

@@ -8,6 +8,10 @@ from fastapi import FastAPI, HTTPException
 import uvicorn
 
 from pitchpredict.api import PitchPredict
+from pitchpredict.backend.fetching import (
+    get_player_record_from_id,
+    get_player_records_from_name,
+)
 import pitchpredict.utils as utils
 import pitchpredict.types.api as api_types
 
@@ -49,12 +53,14 @@ def read_root():
         "name": "pitchpredict",
         "version": utils.get_version(),
         "status": "running",
-        "uptime": datetime.now() - app.state.start_time
+        "uptime": datetime.now() - app.state.start_time,
     }
 
 
 @app.post("/predict/pitcher")
-async def predict_pitcher_endpoint(request: api_types.PredictPitcherRequest) -> api_types.PredictPitcherResponse:
+async def predict_pitcher_endpoint(
+    request: api_types.PredictPitcherRequest,
+) -> api_types.PredictPitcherResponse:
     """
     Predict the pitcher's next pitch and outcome.
     """
@@ -71,7 +77,9 @@ async def predict_pitcher_endpoint(request: api_types.PredictPitcherRequest) -> 
 
 
 @app.post("/predict/batter")
-async def predict_batter_endpoint(request: api_types.PredictBatterRequest) -> api_types.PredictBatterResponse:
+async def predict_batter_endpoint(
+    request: api_types.PredictBatterRequest,
+) -> api_types.PredictBatterResponse:
     """
     Predict the batter's next outcome.
     """
@@ -103,7 +111,9 @@ async def predict_batter_endpoint(request: api_types.PredictBatterRequest) -> ap
 
 
 @app.post("/predict/batted-ball")
-async def predict_batted_ball_endpoint(request: api_types.PredictBattedBallRequest) -> api_types.PredictBattedBallResponse:
+async def predict_batted_ball_endpoint(
+    request: api_types.PredictBattedBallRequest,
+) -> api_types.PredictBattedBallResponse:
     """
     Predict batted ball outcome probabilities given exit velocity, launch angle, and optional game context.
     """
@@ -131,20 +141,62 @@ async def predict_batted_ball_endpoint(request: api_types.PredictBattedBallReque
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def run_server(
-    host: str = "0.0.0.0",
-    port: int = 8056,
-    reload: bool = False
-) -> None:
+@app.get("/players/lookup")
+async def lookup_player_endpoint(
+    name: str,
+    fuzzy: bool = True,
+    limit: int = 1,
+) -> api_types.PlayerLookupResponse:
+    """
+    Lookup player IDs and metadata by name.
+    """
+    try:
+        api = app.state.api
+        cache = getattr(api, "cache", None)
+        results = await get_player_records_from_name(
+            player_name=name,
+            fuzzy_lookup=fuzzy,
+            limit=limit,
+            cache=cache,
+        )
+        return api_types.PlayerLookupResponse(
+            query=name,
+            fuzzy=fuzzy,
+            results=results,
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/players/{mlbam_id}")
+async def get_player_by_id_endpoint(mlbam_id: int) -> api_types.PlayerRecordResponse:
+    """
+    Lookup player metadata by MLBAM ID.
+    """
+    try:
+        api = app.state.api
+        cache = getattr(api, "cache", None)
+        record = await get_player_record_from_id(
+            mlbam_id=mlbam_id,
+            cache=cache,
+        )
+        return api_types.PlayerRecordResponse(
+            mlbam_id=mlbam_id,
+            record=record,
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def run_server(host: str = "0.0.0.0", port: int = 8056, reload: bool = False) -> None:
     """
     Run the FastAPI server.
     """
-    uvicorn.run(
-        app, 
-        host=host,
-        port=port,
-        reload=reload
-    )
+    uvicorn.run(app, host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":

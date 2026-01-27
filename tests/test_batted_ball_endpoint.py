@@ -11,7 +11,9 @@ from pitchpredict import server as server_module
 
 
 class _FakeAPI:
-    def __init__(self, result: dict[str, Any] | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self, result: dict[str, Any] | None = None, error: Exception | None = None
+    ) -> None:
         self.calls: list[dict[str, Any]] = []
         self._result = result
         self._error = error
@@ -83,7 +85,9 @@ def test_predict_batted_ball_endpoint_success(monkeypatch: Any) -> None:
     assert api.calls == [payload]
 
 
-def test_predict_batted_ball_endpoint_propagates_http_exception(monkeypatch: Any) -> None:
+def test_predict_batted_ball_endpoint_propagates_http_exception(
+    monkeypatch: Any,
+) -> None:
     api = _FakeAPI(error=HTTPException(status_code=400, detail="bad algorithm"))
     monkeypatch.setattr(server_module, "PitchPredict", lambda: api)
 

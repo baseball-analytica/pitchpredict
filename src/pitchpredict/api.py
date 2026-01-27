@@ -5,11 +5,16 @@ import logging
 from typing import Any, Literal
 
 from fastapi import HTTPException
-import pybaseball # type: ignore
+import pybaseball  # type: ignore
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
 from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
 from pitchpredict.backend.caching import PitchPredictCache
+from pitchpredict.backend.fetching import (
+    get_player_id_from_name,
+    get_player_record_from_id,
+    get_player_records_from_name,
+)
 from pitchpredict.backend.logging import init_logger
 import pitchpredict.types.api as api_types
 
@@ -51,20 +56,30 @@ class PitchPredict:
         Perform post-initialization tasks, including validation.
         """
         # check logging stuff
+        self.logger = logging.getLogger("pitchpredict")
         if self.enable_logging:
             init_logger(
                 log_dir=self.log_dir,
                 log_level_console=self.log_level_console,
                 log_level_file=self.log_level_file,
             )
-            self.logger = logging.getLogger("pitchpredict")
             self.logger.info("logging initialized")
+        else:
+            # Disable logging by setting a high level and adding a NullHandler
+            self.logger.setLevel(logging.CRITICAL + 1)
+            if not self.logger.handlers:
+                self.logger.addHandler(logging.NullHandler())
 
         # check cache stuff
         if self.enable_cache:
             self.cache = PitchPredictCache(cache_dir=self.cache_dir)
             self.logger.info("cache initialized")
-        
+            for alg in self.algorithms.values():
+                if hasattr(alg, "set_cache"):
+                    alg.set_cache(self.cache)
+                elif hasattr(alg, "cache"):
+                    alg.cache = self.cache
+
         # check algorithms
         VALID_ALGORITHMS = ["similarity", "deep"]
         if self.algorithms == []:
@@ -76,6 +91,76 @@ class PitchPredict:
                 raise ValueError(f"unrecognized algorithm: {algorithm}")
 
         self.logger.debug("post-initialization tasks completed")
+
+    async def get_player_id_from_name(
+        self,
+        player_name: str,
+        fuzzy_lookup: bool | None = None,
+    ) -> int:
+        """
+        Resolve a player's MLBAM ID from their name.
+        """
+        self.logger.debug("get_player_id_from_name called")
+
+        if fuzzy_lookup is None:
+            fuzzy_lookup = self.fuzzy_player_lookup
+        try:
+            return await get_player_id_from_name(
+                player_name=player_name,
+                fuzzy_lookup=fuzzy_lookup,
+                cache=getattr(self, "cache", None),
+            )
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def get_player_records_from_name(
+        self,
+        player_name: str,
+        fuzzy_lookup: bool | None = None,
+        limit: int = 1,
+    ) -> list[dict[str, Any]]:
+        """
+        Resolve player records from a name, returning up to `limit` candidates.
+        """
+        self.logger.debug("get_player_records_from_name called")
+
+        if fuzzy_lookup is None:
+            fuzzy_lookup = self.fuzzy_player_lookup
+        try:
+            return await get_player_records_from_name(
+                player_name=player_name,
+                fuzzy_lookup=fuzzy_lookup,
+                limit=limit,
+                cache=getattr(self, "cache", None),
+            )
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def get_player_record_from_id(self, mlbam_id: int) -> dict[str, Any]:
+        """
+        Resolve a player record from an MLBAM ID.
+        """
+        self.logger.debug("get_player_record_from_id called")
+
+        try:
+            return await get_player_record_from_id(
+                mlbam_id=mlbam_id,
+                cache=getattr(self, "cache", None),
+            )
+        except HTTPException as e:
+            self.logger.error(f"encountered HTTPException: {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"encountered Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
     async def predict_pitcher(
         self,
@@ -153,7 +238,9 @@ class PitchPredict:
         alg = self.algorithms.get(request.algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {request.algorithm}")
-            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {request.algorithm}")
+            raise HTTPException(
+                status_code=400, detail=f"unrecognized algorithm: {request.algorithm}"
+            )
         self.logger.debug(f"using algorithm: {request.algorithm}")
 
         try:
@@ -190,7 +277,9 @@ class PitchPredict:
         alg = self.algorithms.get(algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {algorithm}")
-            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {algorithm}")
+            raise HTTPException(
+                status_code=400, detail=f"unrecognized algorithm: {algorithm}"
+            )
         self.logger.debug(f"using algorithm: {algorithm}")
 
         try:
@@ -236,7 +325,9 @@ class PitchPredict:
         alg = self.algorithms.get(algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {algorithm}")
-            raise HTTPException(status_code=400, detail=f"unrecognized algorithm: {algorithm}")
+            raise HTTPException(
+                status_code=400, detail=f"unrecognized algorithm: {algorithm}"
+            )
         self.logger.debug(f"using algorithm: {algorithm}")
 
         try:

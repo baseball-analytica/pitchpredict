@@ -36,6 +36,10 @@ PitchPredict(
 | `fuzzy_player_lookup` | `bool` | `True` | Enable fuzzy matching for player names |
 | `algorithms` | `dict` | `None` | Custom algorithm implementations |
 
+#### Caching
+
+Caching is enabled by default and stores Parquet datasets plus small metadata files in `cache_dir`. See [Caching](caching.md) for layout and update behavior.
+
 #### Example
 
 ```python
@@ -61,29 +65,52 @@ Predict the pitcher's next pitch given the game context.
 
 ```python
 async def predict_pitcher(
-    pitcher_name: str,
-    batter_name: str,
-    balls: int,
-    strikes: int,
-    score_bat: int,
-    score_fld: int,
-    game_date: str,
-    algorithm: str,
-) -> dict[str, Any]
+    pitcher_id: int,
+    batter_id: int,
+    prev_pitches: list[Pitch] | None = None,
+    algorithm: str = "similarity",
+    sample_size: int = 1,
+    pitcher_age: int | None = None,
+    pitcher_throws: Literal["L", "R"] | None = None,
+    batter_age: int | None = None,
+    batter_hits: Literal["L", "R"] | None = None,
+    count_balls: int | None = None,
+    count_strikes: int | None = None,
+    outs: int | None = None,
+    bases_state: int | None = None,
+    score_bat: int | None = None,
+    score_fld: int | None = None,
+    inning: int | None = None,
+    pitch_number: int | None = None,
+    number_through_order: int | None = None,
+    game_date: str | None = None,
+    fielder_2_id: int | None = None,
+    fielder_3_id: int | None = None,
+    fielder_4_id: int | None = None,
+    fielder_5_id: int | None = None,
+    fielder_6_id: int | None = None,
+    fielder_7_id: int | None = None,
+    fielder_8_id: int | None = None,
+    fielder_9_id: int | None = None,
+    batter_days_since_prev_game: int | None = None,
+    pitcher_days_since_prev_game: int | None = None,
+    strike_zone_top: float | None = None,
+    strike_zone_bottom: float | None = None,
+) -> PredictPitcherResponse
 ```
 
 #### Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `pitcher_name` | `str` | Pitcher's name (e.g., "Clayton Kershaw") |
-| `batter_name` | `str` | Batter's name (e.g., "Aaron Judge") |
-| `balls` | `int` | Current ball count (0-3) |
-| `strikes` | `int` | Current strike count (0-2) |
-| `score_bat` | `int` | Batting team's score |
-| `score_fld` | `int` | Fielding team's score |
-| `game_date` | `str` | Game date in "YYYY-MM-DD" format |
+| `pitcher_id` | `int` | MLBAM pitcher ID |
+| `batter_id` | `int` | MLBAM batter ID |
+| `prev_pitches` | `list[Pitch] \| None` | Optional pitch sequence context |
 | `algorithm` | `str` | Algorithm to use: `"similarity"` or `"deep"` |
+| `sample_size` | `int` | Number of pitches to sample |
+| `game_date` | `str \| None` | Game date in "YYYY-MM-DD" format |
+
+Additional optional context fields include count, bases, score, inning, fielders, rest days, and strike zone bounds (see `PredictPitcherRequest` for the full list).
 
 #### Returns
 
@@ -95,22 +122,26 @@ A dictionary containing:
 | `detailed_pitch_data` | `dict` | Fastball vs offspeed breakdown, percentiles |
 | `basic_outcome_data` | `dict` | Outcome probabilities, swing rates |
 | `detailed_outcome_data` | `dict` | Contact quality metrics |
+| `pitches` | `list` | Sampled pitches with detailed attributes |
 | `prediction_metadata` | `dict` | Timing and sample information |
+
+The return value is a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
 #### Example
 
 ```python
 import asyncio
+from pybaseball import playerid_lookup
 from pitchpredict import PitchPredict
 
 async def main():
     client = PitchPredict()
 
     result = await client.predict_pitcher(
-        pitcher_name="Clayton Kershaw",
-        batter_name="Aaron Judge",
-        balls=1,
-        strikes=2,
+        pitcher_id=int(playerid_lookup("Kershaw", "Clayton").iloc[0]["key_mlbam"]),
+        batter_id=int(playerid_lookup("Judge", "Aaron").iloc[0]["key_mlbam"]),
+        count_balls=1,
+        count_strikes=2,
         score_bat=2,
         score_fld=1,
         game_date="2024-06-15",
@@ -118,15 +149,15 @@ async def main():
     )
 
     # Pitch type probabilities
-    print(result["basic_pitch_data"]["pitch_type_probs"])
+    print(result.basic_pitch_data["pitch_type_probs"])
     # {'FF': 0.42, 'SL': 0.31, 'CU': 0.18, 'CH': 0.09}
 
     # Average pitch speed
-    print(result["basic_pitch_data"]["pitch_speed_mean"])
+    print(result.basic_pitch_data["pitch_speed_mean"])
     # 92.5
 
     # Outcome probabilities
-    print(result["basic_outcome_data"]["outcome_probs"])
+    print(result.basic_outcome_data["outcome_probs"])
     # {'strike': 0.45, 'ball': 0.35, 'contact': 0.20}
 
 asyncio.run(main())
@@ -150,7 +181,7 @@ async def predict_batter(
     pitch_type: str,
     pitch_speed: float,
     pitch_x: float,
-    pitch_y: float,
+    pitch_z: float,
     algorithm: str,
 ) -> dict[str, Any]
 ```
@@ -169,7 +200,7 @@ async def predict_batter(
 | `pitch_type` | `str` | Pitch type code (e.g., "FF", "SL") |
 | `pitch_speed` | `float` | Pitch speed in mph |
 | `pitch_x` | `float` | Horizontal location at plate (feet from center) |
-| `pitch_y` | `float` | Vertical location at plate (feet from ground) |
+| `pitch_z` | `float` | Vertical location at plate (feet from ground) |
 | `algorithm` | `str` | Algorithm to use: `"similarity"` or `"deep"` |
 
 #### Returns
@@ -202,7 +233,7 @@ async def main():
         pitch_type="FF",
         pitch_speed=95.0,
         pitch_x=0.5,
-        pitch_y=2.5,
+        pitch_z=2.5,
         algorithm="similarity"
     )
 

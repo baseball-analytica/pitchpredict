@@ -31,9 +31,11 @@ from pitchpredict.backend.algs.deep.dataset import (
 )
 from pitchpredict.backend.algs.deep.types import PitchToken
 
+
 def nll_to_bpb(nll: float) -> float:
     """Convert natural-log NLL (per token) to bits-per-byte (base-2)."""
     return float(nll / math.log(2.0))
+
 
 def evaluate(
     model: nn.Module, loader: DataLoader, device: torch.device, amp_dtype: str
@@ -67,7 +69,9 @@ def _load_xlstm_module() -> object:
     if not xlstm_path.exists():
         raise FileNotFoundError(f"xlstm.py not found at {xlstm_path}")
 
-    spec = importlib.util.spec_from_file_location("pitchpredict_scripts_xlstm", xlstm_path)
+    spec = importlib.util.spec_from_file_location(
+        "pitchpredict_scripts_xlstm", xlstm_path
+    )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"unable to import xlstm module from {xlstm_path}")
 
@@ -76,7 +80,12 @@ def _load_xlstm_module() -> object:
     return module
 
 
-def _build_model(xlstm_mod: object, cfg_obj: object, state_dict: dict[str, torch.Tensor], device: torch.device) -> torch.nn.Module:
+def _build_model(
+    xlstm_mod: object,
+    cfg_obj: object,
+    state_dict: dict[str, torch.Tensor],
+    device: torch.device,
+) -> torch.nn.Module:
     """Instantiate BaseballxLSTM with the config pulled from the checkpoint."""
     model = xlstm_mod.BaseballxLSTM(
         vocab_size=cfg_obj.vocab_size,
@@ -99,7 +108,9 @@ def _build_model(xlstm_mod: object, cfg_obj: object, state_dict: dict[str, torch
     state_dict = maybe_strip_compile_prefix(state_dict)
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
     if missing or unexpected:
-        raise RuntimeError(f"state dict mismatch: missing={missing} unexpected={unexpected}")
+        raise RuntimeError(
+            f"state dict mismatch: missing={missing} unexpected={unexpected}"
+        )
     model.to(device)
     model.eval()
     return model
@@ -160,22 +171,29 @@ def _stream_rows(
     print("-" * 80, flush=True)
 
 
-def _prepare_batch(chunk: PackedPitchChunk, device: torch.device) -> tuple[torch.LongTensor, PackedPitchContext]:
+def _prepare_batch(
+    chunk: PackedPitchChunk, device: torch.device
+) -> tuple[torch.LongTensor, PackedPitchContext]:
     x = chunk.x.unsqueeze(0).to(device=device, dtype=torch.long)
     ctx = chunk_to_context(chunk, device)
     ctx = _batchify_context(ctx)
     return x, ctx
 
 
-def _select_chunk(dataset: PackedPitchDataset, *, chunk_index: int | None) -> tuple[int, PackedPitchChunk]:
+def _select_chunk(
+    dataset: PackedPitchDataset, *, chunk_index: int | None
+) -> tuple[int, PackedPitchChunk]:
     if len(dataset) == 0:
         raise ValueError("dataset contains no chunks, check data_dir/seq_len settings")
     if chunk_index is None:
         chunk_index = random.randrange(len(dataset))
     if not (0 <= chunk_index < len(dataset)):
-        raise IndexError(f"chunk_index {chunk_index} out of range (0 <= idx < {len(dataset)})")
+        raise IndexError(
+            f"chunk_index {chunk_index} out of range (0 <= idx < {len(dataset)})"
+        )
     chunk = dataset[chunk_index]
     return chunk_index, chunk
+
 
 def maybe_strip_compile_prefix(
     state_dict: OrderedDict[str, torch.Tensor],
@@ -191,18 +209,66 @@ def maybe_strip_compile_prefix(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Stream predictions from an xLSTM checkpoint.")
-    parser.add_argument("--ckpt", required=True, type=str, help="Path to checkpoint produced by scripts/xlstm.py")
-    parser.add_argument("--data-dir", type=str, default=None, help="Directory containing pitch_seq.bin + context bins")
-    parser.add_argument("--eval", action="store_true", help="Evaluate the checkpoint on the test set.")
-    parser.add_argument("--context-prefix", type=str, default=None, help="Override context prefix (defaults to cfg.context_prefix)")
-    parser.add_argument("--chunk-index", type=int, default=None, help="Specific chunk index to stream. Random when omitted.")
-    parser.add_argument("--offset", type=int, default=0, help="Dataset token offset before chunk selection.")
-    parser.add_argument("--device", type=str, default=None, help="torch device string (e.g. cuda:0, cpu). Auto-detect when omitted.")
-    parser.add_argument("--max-steps", type=int, default=128, help="Maximum number of time-steps to stream.")
-    parser.add_argument("--topk", type=int, default=5, help="How many tokens to show per step.")
-    parser.add_argument("--delay", type=float, default=0.05, help="Seconds to sleep between rows (0 to disable).")
-    parser.add_argument("--seed", type=int, default=None, help="Optional RNG seed for chunk sampling.")
+    parser = argparse.ArgumentParser(
+        description="Stream predictions from an xLSTM checkpoint."
+    )
+    parser.add_argument(
+        "--ckpt",
+        required=True,
+        type=str,
+        help="Path to checkpoint produced by scripts/xlstm.py",
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=None,
+        help="Directory containing pitch_seq.bin + context bins",
+    )
+    parser.add_argument(
+        "--eval", action="store_true", help="Evaluate the checkpoint on the test set."
+    )
+    parser.add_argument(
+        "--context-prefix",
+        type=str,
+        default=None,
+        help="Override context prefix (defaults to cfg.context_prefix)",
+    )
+    parser.add_argument(
+        "--chunk-index",
+        type=int,
+        default=None,
+        help="Specific chunk index to stream. Random when omitted.",
+    )
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Dataset token offset before chunk selection.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="torch device string (e.g. cuda:0, cpu). Auto-detect when omitted.",
+    )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=128,
+        help="Maximum number of time-steps to stream.",
+    )
+    parser.add_argument(
+        "--topk", type=int, default=5, help="How many tokens to show per step."
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.05,
+        help="Seconds to sleep between rows (0 to disable).",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Optional RNG seed for chunk sampling."
+    )
     return parser.parse_args()
 
 
@@ -272,4 +338,3 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         sys.exit("\nInterrupted.")
-
