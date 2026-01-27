@@ -57,6 +57,14 @@ async def main():
 asyncio.run(main())
 ```
 
+### CLI
+
+```bash
+pitchpredict player lookup "Aaron Judge"
+pitchpredict predict pitcher "Zack Wheeler" "Juan Soto" --balls 1 --strikes 2
+pitchpredict cache status
+```
+
 ### REST API Server
 
 ```bash

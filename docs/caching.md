@@ -36,3 +36,23 @@ client = PitchPredict(
 ```
 
 To refresh cached data, delete the cache directory and rerun your requests.
+
+## CLI Cache Commands
+
+The CLI exposes cache inspection and management commands:
+
+```bash
+# Show cache size and per-category stats
+pitchpredict cache status
+
+# Clear specific categories or the full cache
+pitchpredict cache clear --category pitcher
+pitchpredict cache clear --confirm
+
+# Warm caches for a player or league-wide batted balls
+pitchpredict cache warm "Aaron Judge"        # pitcher + batter
+pitchpredict cache warm 592450 --type batter
+pitchpredict cache warm --type batted-ball --seasons 4
+```
+
+All cache commands accept `--cache-dir` to target a non-default location.

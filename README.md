@@ -79,6 +79,26 @@ Pitcher predictions return a `PredictPitcherResponse` model; use attribute acces
 
 Caching is enabled by default and stores data in `.pitchpredict_cache`. Delete the folder to refresh cached data.
 
+### CLI
+
+Run predictions and look up players directly from the command line (no server required):
+
+```bash
+# Lookup player IDs
+pitchpredict player lookup "Aaron Judge"
+
+# Predict next pitch (names or MLBAM IDs)
+pitchpredict predict pitcher "Zack Wheeler" "Juan Soto" --balls 1 --strikes 2
+
+# Predict batter outcome given a pitch
+pitchpredict predict batter "Aaron Judge" "Gerrit Cole" FF 96.5 0.15 2.85
+
+# Predict batted-ball outcome (use --format json for machine-readable output)
+pitchpredict predict batted-ball 102.3 24 --format json
+```
+
+Use `--verbose` for detailed tables, and `pitchpredict cache status` to inspect the local cache.
+
 ### REST API Server
 
 Start the server:

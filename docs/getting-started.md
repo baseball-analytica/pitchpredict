@@ -52,6 +52,26 @@ asyncio.run(main())
 Pitcher and batter IDs are MLBAM IDs; use `PitchPredict.get_player_id_from_name` as shown above to resolve names.
 Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
+## Quick Start: CLI
+
+Run predictions and player lookups without starting the server:
+
+```bash
+# Lookup player IDs
+pitchpredict player lookup "Aaron Judge"
+
+# Predict next pitch
+pitchpredict predict pitcher "Zack Wheeler" "Juan Soto" --balls 1 --strikes 2
+
+# Predict batter outcome given a pitch
+pitchpredict predict batter "Aaron Judge" "Gerrit Cole" FF 96.5 0.15 2.85
+
+# Predict batted-ball outcome
+pitchpredict predict batted-ball 102.3 24 --format json
+```
+
+Use `--verbose` for detailed tables and `--format json` for machine-readable output.
+
 ## Quick Start: REST API Server
 
 Start the server:
