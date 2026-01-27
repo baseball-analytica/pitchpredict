@@ -22,7 +22,8 @@ def run_cli():
     Run the PitchPredict CLI.
     """
     parser = argparse.ArgumentParser(
-        description="Predict MLB pitcher/batter behavior and outcomes using a given context"
+        description="Predict MLB pitcher/batter behavior and outcomes using a given context",
+        epilog="https://github.com/baseball-analytica/pitchpredict"
     )
 
     # Add subcommands

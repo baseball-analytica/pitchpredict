@@ -17,13 +17,46 @@ def _filter_pitches_by_range(
     pitches: pd.DataFrame, start_date: str, end_date: str
 ) -> pd.DataFrame:
     """Return a view of pitches within the requested date range."""
-    if "game_date" not in pitches.columns:
+    if "game_date_dt" in pitches.columns:
+        dates = pitches["game_date_dt"]
+    elif "game_date" in pitches.columns:
+        dates = pd.to_datetime(pitches["game_date"], errors="coerce")
+    else:
         return pitches.copy(deep=False)
-    dates = pd.to_datetime(pitches["game_date"], errors="coerce")
     start_ts = pd.Timestamp(start_date)
     end_ts = pd.Timestamp(end_date)
     mask = (dates >= start_ts) & (dates <= end_ts)
     return pitches.loc[mask].copy(deep=False)
+
+
+def _ensure_game_date_dt(pitches: pd.DataFrame) -> pd.DataFrame:
+    """Add a parsed game_date_dt column when possible."""
+    if "game_date" not in pitches.columns:
+        return pitches
+    if "game_date_dt" not in pitches.columns:
+        pitches = pitches.copy(deep=False)
+        pitches["game_date_dt"] = pd.to_datetime(pitches["game_date"], errors="coerce")
+        return pitches
+    if pitches["game_date_dt"].isna().any():
+        pitches = pitches.copy(deep=False)
+        missing = pitches["game_date_dt"].isna()
+        if missing.any():
+            pitches.loc[missing, "game_date_dt"] = pd.to_datetime(
+                pitches.loc[missing, "game_date"], errors="coerce"
+            )
+    return pitches
+
+
+def _select_columns(
+    pitches: pd.DataFrame, columns: list[str] | None
+) -> pd.DataFrame:
+    """Select available columns from pitches when a subset is requested."""
+    if not columns:
+        return pitches
+    available = [column for column in columns if column in pitches.columns]
+    if not available:
+        return pitches
+    return pitches.loc[:, available]
 
 
 def _coerce_record_value(value: object) -> object:
@@ -51,6 +84,7 @@ async def get_pitches_from_pitcher(
     pitcher_id: int,
     start_date: str,
     end_date: str | None = None,
+    columns: list[str] | None = None,
     cache: PitchPredictCache | None = None,
 ) -> pd.DataFrame:
     """
@@ -61,6 +95,7 @@ async def get_pitches_from_pitcher(
         pitcher_id: The MLBAM ID of the pitcher.
         start_date: The start date of the period to get pitches for.
         end_date: The end date of the period to get pitches for.
+        columns: Optional list of columns to return.
 
     Returns:
         A pandas DataFrame containing the pitches thrown by the pitcher.
@@ -72,7 +107,9 @@ async def get_pitches_from_pitcher(
         end_date = datetime.now().strftime("%Y-%m-%d")
 
     if cache is not None:
-        cached = cache.get_pitcher_pitches(pitcher_id=pitcher_id, end_date=end_date)
+        cached = cache.get_pitcher_pitches(
+            pitcher_id=pitcher_id, end_date=end_date, columns=columns
+        )
         if cached is not None:
             return _filter_pitches_by_range(cached, start_date, end_date)
 
@@ -115,9 +152,11 @@ async def get_pitches_from_pitcher(
                     combined = cached_data
                 else:
                     combined = pd.concat([cached_data, new_pitches], ignore_index=True)
+                combined = _ensure_game_date_dt(combined)
                 cache.set_pitcher_pitches(
                     pitcher_id=pitcher_id, end_date=end_date, pitches=combined
                 )
+                combined = _select_columns(combined, columns)
                 return _filter_pitches_by_range(combined, start_date, end_date)
 
     try:
@@ -138,10 +177,12 @@ async def get_pitches_from_pitcher(
             )
 
         logger.debug("pitches fetched successfully")
+        pitches = _ensure_game_date_dt(pitches)
         if cache is not None:
             cache.set_pitcher_pitches(
                 pitcher_id=pitcher_id, end_date=end_date, pitches=pitches
             )
+        pitches = _select_columns(pitches, columns)
         return pitches
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -155,6 +196,7 @@ async def get_pitches_to_batter(
     batter_id: int,
     start_date: str,
     end_date: str | None = None,
+    columns: list[str] | None = None,
     cache: PitchPredictCache | None = None,
 ) -> pd.DataFrame:
     """
@@ -167,7 +209,9 @@ async def get_pitches_to_batter(
         end_date = datetime.now().strftime("%Y-%m-%d")
 
     if cache is not None:
-        cached = cache.get_batter_pitches(batter_id=batter_id, end_date=end_date)
+        cached = cache.get_batter_pitches(
+            batter_id=batter_id, end_date=end_date, columns=columns
+        )
         if cached is not None:
             return _filter_pitches_by_range(cached, start_date, end_date)
 
@@ -207,9 +251,11 @@ async def get_pitches_to_batter(
                     combined = cached_data
                 else:
                     combined = pd.concat([cached_data, new_pitches], ignore_index=True)
+                combined = _ensure_game_date_dt(combined)
                 cache.set_batter_pitches(
                     batter_id=batter_id, end_date=end_date, pitches=combined
                 )
+                combined = _select_columns(combined, columns)
                 return _filter_pitches_by_range(combined, start_date, end_date)
 
     try:
@@ -230,10 +276,12 @@ async def get_pitches_to_batter(
             )
 
         logger.debug("pitches fetched successfully")
+        pitches = _ensure_game_date_dt(pitches)
         if cache is not None:
             cache.set_batter_pitches(
                 batter_id=batter_id, end_date=end_date, pitches=pitches
             )
+        pitches = _select_columns(pitches, columns)
         return pitches
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")
@@ -449,6 +497,7 @@ async def get_all_batted_balls(
     start_date: str | None = None,
     end_date: str | None = None,
     n_seasons: int = 3,
+    columns: list[str] | None = None,
     cache: PitchPredictCache | None = None,
 ) -> pd.DataFrame:
     """
@@ -458,6 +507,7 @@ async def get_all_batted_balls(
         start_date: The start date of the period to get batted balls for. If None, defaults to n_seasons ago.
         end_date: The end date of the period to get batted balls for. If None, defaults to current date.
         n_seasons: Number of seasons to fetch if start_date is not provided (default: 3).
+        columns: Optional list of columns to return.
 
     Returns:
         A pandas DataFrame containing batted ball events with launch_speed and launch_angle data.
@@ -474,7 +524,9 @@ async def get_all_batted_balls(
         start_date = f"{start_year}-03-01"
 
     if cache is not None:
-        cached = cache.get_batted_balls(start_date=start_date, end_date=end_date)
+        cached = cache.get_batted_balls(
+            start_date=start_date, end_date=end_date, columns=columns
+        )
         if cached is not None:
             return cached
 
@@ -521,11 +573,13 @@ async def get_all_batted_balls(
                         & (pitches["launch_angle"].notna())
                     ].copy()
                     combined = pd.concat([cached_data, batted_balls], ignore_index=True)
+                combined = _ensure_game_date_dt(combined)
                 cache.set_batted_balls(
                     start_date=cached_start,
                     end_date=end_date,
                     batted_balls=combined,
                 )
+                combined = _select_columns(combined, columns)
                 return _filter_pitches_by_range(combined, start_date, end_date)
 
     try:
@@ -559,10 +613,12 @@ async def get_all_batted_balls(
             )
 
         logger.debug(f"fetched {batted_balls.shape[0]} batted ball events successfully")
+        batted_balls = _ensure_game_date_dt(batted_balls)
         if cache is not None:
             cache.set_batted_balls(
                 start_date=start_date, end_date=end_date, batted_balls=batted_balls
             )
+        batted_balls = _select_columns(batted_balls, columns)
         return batted_balls
     except HTTPException as e:
         logger.error(f"encountered HTTPException: {e}")

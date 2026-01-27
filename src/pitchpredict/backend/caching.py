@@ -90,10 +90,21 @@ class PitchPredictCache:
 
     def _ensure_game_date_dt(self, pitches: pd.DataFrame) -> pd.DataFrame:
         """Ensure a parsed game_date_dt column exists for filtering."""
-        if "game_date_dt" in pitches.columns or "game_date" not in pitches.columns:
+        if "game_date" not in pitches.columns:
             return pitches
-        pitches = pitches.copy(deep=False)
-        pitches["game_date_dt"] = pd.to_datetime(pitches["game_date"], errors="coerce")
+        if "game_date_dt" not in pitches.columns:
+            pitches = pitches.copy(deep=False)
+            pitches["game_date_dt"] = pd.to_datetime(
+                pitches["game_date"], errors="coerce"
+            )
+            return pitches
+        if pitches["game_date_dt"].isna().any():
+            pitches = pitches.copy(deep=False)
+            missing = pitches["game_date_dt"].isna()
+            if missing.any():
+                pitches.loc[missing, "game_date_dt"] = pd.to_datetime(
+                    pitches.loc[missing, "game_date"], errors="coerce"
+                )
         return pitches
 
     def _filter_pitches_by_date(
@@ -123,12 +134,25 @@ class PitchPredictCache:
         )
         return pitches.loc[mask].copy(deep=False)
 
-    def _read_dataframe(self, path: Path) -> pd.DataFrame | None:
+    def _read_dataframe(
+        self, path: Path, columns: list[str] | None = None
+    ) -> pd.DataFrame | None:
         """Read a cached Parquet file if it exists."""
         if not path.exists():
             return None
         try:
-            return pd.read_parquet(path)
+            if columns is None:
+                return pd.read_parquet(path)
+            try:
+                return pd.read_parquet(path, columns=columns)
+            except Exception as exc:
+                self.logger.debug(
+                    "failed to read cache file %s with columns %s: %s",
+                    path,
+                    columns,
+                    exc,
+                )
+                return pd.read_parquet(path)
         except Exception as exc:
             self.logger.warning(f"failed to read cache file {path}: {exc}")
             return None
@@ -200,7 +224,7 @@ class PitchPredictCache:
             self.logger.warning(f"failed to write cache metadata {path}: {exc}")
 
     def get_pitcher_pitches(
-        self, pitcher_id: int, end_date: str | None
+        self, pitcher_id: int, end_date: str | None, columns: list[str] | None = None
     ) -> pd.DataFrame | None:
         """Return cached pitcher pitches if coverage includes end_date."""
         normalized_end_date = self._normalize_end_date(end_date)
@@ -209,12 +233,12 @@ class PitchPredictCache:
         cached_end_date = self._read_end_date_meta(meta_path)
         if cached_end_date is not None:
             if pd.Timestamp(normalized_end_date) <= cached_end_date:
-                data = self._read_dataframe(path)
+                data = self._read_dataframe(path, columns=columns)
                 if data is not None:
                     self.logger.debug(f"cache hit for pitcher {pitcher_id} at {path}")
                     return self._filter_pitches_by_date(data, normalized_end_date)
             return None
-        data = self._read_dataframe(path)
+        data = self._read_dataframe(path, columns=columns)
         if data is None:
             return None
         data = self._ensure_game_date_dt(data)
@@ -262,12 +286,13 @@ class PitchPredictCache:
         ):
             return
         path = self._pitcher_path(pitcher_id)
+        pitches = self._ensure_game_date_dt(pitches)
         self._write_dataframe(path, pitches)
         self._write_end_date_meta(meta_path, normalized_end_date)
         self.logger.debug(f"cached pitcher pitches at {path}")
 
     def get_batter_pitches(
-        self, batter_id: int, end_date: str | None
+        self, batter_id: int, end_date: str | None, columns: list[str] | None = None
     ) -> pd.DataFrame | None:
         """Return cached batter pitches if coverage includes end_date."""
         normalized_end_date = self._normalize_end_date(end_date)
@@ -276,12 +301,12 @@ class PitchPredictCache:
         cached_end_date = self._read_end_date_meta(meta_path)
         if cached_end_date is not None:
             if pd.Timestamp(normalized_end_date) <= cached_end_date:
-                data = self._read_dataframe(path)
+                data = self._read_dataframe(path, columns=columns)
                 if data is not None:
                     self.logger.debug(f"cache hit for batter {batter_id} at {path}")
                     return self._filter_pitches_by_date(data, normalized_end_date)
             return None
-        data = self._read_dataframe(path)
+        data = self._read_dataframe(path, columns=columns)
         if data is None:
             return None
         data = self._ensure_game_date_dt(data)
@@ -327,11 +352,14 @@ class PitchPredictCache:
         ):
             return
         path = self._batter_path(batter_id)
+        pitches = self._ensure_game_date_dt(pitches)
         self._write_dataframe(path, pitches)
         self._write_end_date_meta(meta_path, normalized_end_date)
         self.logger.debug(f"cached batter pitches at {path}")
 
-    def get_batted_balls(self, start_date: str, end_date: str) -> pd.DataFrame | None:
+    def get_batted_balls(
+        self, start_date: str, end_date: str, columns: list[str] | None = None
+    ) -> pd.DataFrame | None:
         """Return cached batted balls if the date range is covered."""
         try:
             start_ts = pd.Timestamp(start_date)
@@ -346,7 +374,7 @@ class PitchPredictCache:
         if cached_range is not None:
             cached_start, cached_end = cached_range
             if start_ts >= cached_start and end_ts <= cached_end:
-                data = self._read_dataframe(self._batted_ball_path)
+                data = self._read_dataframe(self._batted_ball_path, columns=columns)
                 if data is not None:
                     self.logger.debug(
                         f"cache hit for batted balls at {self._batted_ball_path}"
@@ -354,7 +382,7 @@ class PitchPredictCache:
                     return self._filter_pitches_by_range(data, start_date, end_date)
                 return None
 
-        data = self._read_dataframe(self._batted_ball_path)
+        data = self._read_dataframe(self._batted_ball_path, columns=columns)
         if data is None:
             return None
         data = self._ensure_game_date_dt(data)
@@ -389,6 +417,7 @@ class PitchPredictCache:
             if start_ts >= cached_start and end_ts <= cached_end:
                 return
 
+        batted_balls = self._ensure_game_date_dt(batted_balls)
         self._write_dataframe(self._batted_ball_path, batted_balls)
         self._write_range_meta(self._batted_ball_meta_path, start_date, end_date)
         self.logger.debug(f"cached batted balls at {self._batted_ball_path}")

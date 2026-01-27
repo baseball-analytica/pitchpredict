@@ -25,6 +25,106 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
     The PitchPredict algorithm that uses similarity and nearest-neighbor analysis to predict the next pitch and outcome.
     """
 
+    PITCHER_PITCH_COLUMNS: tuple[str, ...] = (
+        "game_date",
+        "game_date_dt",
+        "batter",
+        "p_throws",
+        "stand",
+        "balls",
+        "strikes",
+        "outs_when_up",
+        "inning",
+        "n_thruorder_pitcher",
+        "fielder_2",
+        "fielder_3",
+        "fielder_4",
+        "fielder_5",
+        "fielder_6",
+        "fielder_7",
+        "fielder_8",
+        "fielder_9",
+        "on_1b",
+        "on_2b",
+        "on_3b",
+        "age_pit",
+        "age_bat",
+        "bat_score",
+        "fld_score",
+        "pitch_number",
+        "batter_days_since_prev_game",
+        "pitcher_days_since_prev_game",
+        "sz_top",
+        "sz_bot",
+        "pitch_type",
+        "release_speed",
+        "plate_x",
+        "plate_z",
+        "type",
+        "bat_speed",
+        "swing_length",
+        "events",
+        "bb_type",
+        "launch_speed",
+        "launch_angle",
+        "estimated_ba_using_speedangle",
+        "estimated_slg_using_speedangle",
+        "estimated_woba_using_speedangle",
+        "release_spin_rate",
+        "spin_axis",
+        "release_pos_x",
+        "release_pos_z",
+        "release_extension",
+        "vx0",
+        "vy0",
+        "vz0",
+        "ax",
+        "ay",
+        "az",
+        "description",
+    )
+    BATTER_PITCH_COLUMNS: tuple[str, ...] = (
+        "game_date",
+        "game_date_dt",
+        "pitcher",
+        "balls",
+        "strikes",
+        "bat_score",
+        "fld_score",
+        "pitch_type",
+        "release_speed",
+        "plate_x",
+        "plate_z",
+        "type",
+        "bat_speed",
+        "swing_length",
+        "events",
+        "bb_type",
+        "launch_speed",
+        "launch_angle",
+        "estimated_ba_using_speedangle",
+        "estimated_slg_using_speedangle",
+        "estimated_woba_using_speedangle",
+    )
+    BATTED_BALL_COLUMNS: tuple[str, ...] = (
+        "game_date",
+        "game_date_dt",
+        "launch_speed",
+        "launch_angle",
+        "hc_x",
+        "hc_y",
+        "bb_type",
+        "outs_when_up",
+        "on_1b",
+        "on_2b",
+        "on_3b",
+        "batter",
+        "events",
+        "estimated_ba_using_speedangle",
+        "estimated_slg_using_speedangle",
+        "estimated_woba_using_speedangle",
+    )
+
     def __init__(
         self,
         name: str = "similarity",
@@ -67,20 +167,38 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         self,
         pitcher_id: int,
         end_date: str | None,
+        columns: list[str] | None = None,
     ) -> pd.DataFrame:
         normalized_end_date = self._normalize_end_date(end_date)
         cached = self._pitcher_cache.get(pitcher_id)
         if cached is not None:
             cached_end_date, cached_pitches = cached
             if normalized_end_date <= cached_end_date:
+                if columns is not None:
+                    available = [
+                        column
+                        for column in columns
+                        if column in cached_pitches.columns
+                    ]
+                    if available:
+                        cached_pitches = cached_pitches.loc[:, available]
                 return self._filter_pitches_by_date(cached_pitches, normalized_end_date)
 
-        pitches = await get_pitches_from_pitcher(
-            pitcher_id=pitcher_id,
-            start_date="2015-01-01",
-            end_date=normalized_end_date.strftime("%Y-%m-%d"),
-            cache=self.cache,
-        )
+        if columns is None:
+            pitches = await get_pitches_from_pitcher(
+                pitcher_id=pitcher_id,
+                start_date="2015-01-01",
+                end_date=normalized_end_date.strftime("%Y-%m-%d"),
+                cache=self.cache,
+            )
+        else:
+            pitches = await get_pitches_from_pitcher(
+                pitcher_id=pitcher_id,
+                start_date="2015-01-01",
+                end_date=normalized_end_date.strftime("%Y-%m-%d"),
+                columns=columns,
+                cache=self.cache,
+            )
         pitches = self._ensure_game_date_dt(pitches)
         self._pitcher_cache[pitcher_id] = (normalized_end_date, pitches)
         return self._filter_pitches_by_date(pitches, normalized_end_date)
@@ -119,6 +237,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             pitches = await self._get_cached_pitches_for_pitcher(
                 pitcher_id=pitcher_id,
                 end_date=request.game_date,
+                columns=list(self.PITCHER_PITCH_COLUMNS),
             )
             self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
 
@@ -203,6 +322,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 batter_id=batter_id,
                 start_date="2015-01-01",
                 end_date=game_date,
+                columns=list(self.BATTER_PITCH_COLUMNS),
                 cache=self.cache,
             )
             self.logger.debug(f"successfully fetched {pitches.shape[0]} pitches")
@@ -270,8 +390,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             context_values = context.model_dump()
             similarity_score = pd.Series(0.0, index=pitches.index)
 
-            def add_weighted_score(field: str, scores: pd.Series) -> None:
-                weight = weights.get(field, 0.0)
+            def add_weighted_score(
+                field: str, scores: pd.Series, weight: float
+            ) -> None:
                 if weight <= 0.0:
                     return
                 nonlocal similarity_score
@@ -323,12 +444,18 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             }
 
             for field, column in eq_fields.items():
+                weight = weights.get(field, 0.0)
+                if weight <= 0.0:
+                    continue
                 value = context_values.get(field)
                 if value is None or column not in pitches.columns:
                     continue
-                add_weighted_score(field, score_equal(pitches[column], value))
+                add_weighted_score(field, score_equal(pitches[column], value), weight)
 
             for field, (column, max_diff) in numeric_fields.items():
+                weight = weights.get(field, 0.0)
+                if weight <= 0.0:
+                    continue
                 value = context_values.get(field)
                 if value is None or column not in pitches.columns:
                     continue
@@ -336,12 +463,17 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 if tolerance is None:
                     tolerance = pd.to_numeric(pitches[column], errors="coerce").std()
                 add_weighted_score(
-                    field, score_numeric(pitches[column], float(value), tolerance)
+                    field,
+                    score_numeric(pitches[column], float(value), tolerance),
+                    weight,
                 )
 
             bases_state = context_values.get("bases_state")
-            if bases_state is not None and {"on_1b", "on_2b", "on_3b"}.issubset(
-                pitches.columns
+            bases_weight = weights.get("bases_state", 0.0)
+            if (
+                bases_weight > 0.0
+                and bases_state is not None
+                and {"on_1b", "on_2b", "on_3b"}.issubset(pitches.columns)
             ):
                 runner_on_1b = pitches["on_1b"].notna()
                 runner_on_2b = pitches["on_2b"].notna()
@@ -355,9 +487,10 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                     + (runner_on_3b != target_on_3b).astype(int)
                 )
                 scores = (1 - (mismatches / 3)).clip(lower=0)
-                add_weighted_score("bases_state", scores)
+                add_weighted_score("bases_state", scores, bases_weight)
 
-            if context.game_date is not None:
+            date_weight = weights.get("game_date", 0.0)
+            if date_weight > 0.0 and context.game_date is not None:
                 target_date = pd.Timestamp(context.game_date)
                 if "game_date_dt" in pitches.columns:
                     dates = pitches["game_date_dt"]
@@ -368,13 +501,17 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
                 if dates is not None:
                     day_diff = (dates - target_date).dt.days.abs()
                     date_scores = (1 - (day_diff / 365.0)).clip(lower=0).fillna(0.0)
-                    add_weighted_score("game_date", date_scores)
+                    add_weighted_score("game_date", date_scores, date_weight)
 
             pitches["similarity_score"] = similarity_score
 
-            pitches = pitches.sort_values(by="similarity_score", ascending=False)
+            if pitches.empty:
+                return pitches
             n_samples = max(100, int(len(pitches) * sample_pctg))
-            pitches = pitches.head(n_samples)
+            if n_samples >= len(pitches):
+                pitches = pitches.sort_values(by="similarity_score", ascending=False)
+            else:
+                pitches = pitches.nlargest(n_samples, "similarity_score")
 
             self.logger.debug(
                 f"successfully fetched {pitches.shape[0]} similar pitches"
@@ -448,8 +585,15 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             )
 
             # sort pitches by similarity score and return the top N pitches
-            pitches = pitches.sort_values(by="similarity_score", ascending=False)
-            pitches = pitches.head(int(len(pitches) * sample_pctg))
+            if pitches.empty:
+                return pitches
+            n_samples = int(len(pitches) * sample_pctg)
+            if n_samples <= 0:
+                return pitches.head(0)
+            if n_samples >= len(pitches):
+                pitches = pitches.sort_values(by="similarity_score", ascending=False)
+            else:
+                pitches = pitches.nlargest(n_samples, "similarity_score")
 
             self.logger.debug(
                 f"successfully fetched {pitches.shape[0]} similar pitches"
@@ -989,7 +1133,9 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             self.logger.debug(f"start time: {start_time}")
 
             # Fetch batted ball data
-            batted_balls = await get_all_batted_balls(cache=self.cache)
+            batted_balls = await get_all_batted_balls(
+                columns=list(self.BATTED_BALL_COLUMNS), cache=self.cache
+            )
             self.logger.debug(
                 f"successfully fetched {batted_balls.shape[0]} batted balls"
             )
@@ -1170,11 +1316,15 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             )
 
             # Sort by similarity and take top N%
-            batted_balls = batted_balls.sort_values(
-                by="similarity_score", ascending=False
-            )
+            if batted_balls.empty:
+                return batted_balls
             n_samples = max(100, int(len(batted_balls) * sample_pctg))
-            similar = batted_balls.head(n_samples)
+            if n_samples >= len(batted_balls):
+                similar = batted_balls.sort_values(
+                    by="similarity_score", ascending=False
+                )
+            else:
+                similar = batted_balls.nlargest(n_samples, "similarity_score")
 
             self.logger.debug(
                 f"successfully found {similar.shape[0]} similar batted balls"
