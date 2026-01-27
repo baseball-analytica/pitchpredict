@@ -55,6 +55,11 @@ def _add_status_parser(subparsers: argparse._SubParsersAction) -> None:
         default="rich",
         help="Output format (default: rich)",
     )
+    parser.add_argument(
+        "--no-compact",
+        action="store_false",
+        help="Do not compact the console output",
+    )
     parser.set_defaults(func=handle_cache_status)
 
 
@@ -171,7 +176,12 @@ def handle_cache_status(args: argparse.Namespace) -> None:
         "categories": categories,
     }
 
-    format_cache_status(str(cache_dir), stats, format_type=args.format)
+    format_cache_status(
+        str(cache_dir),
+        stats,
+        format_type=args.format,
+        compact=not args.no_compact,
+    )
 
 
 def handle_cache_clear(args: argparse.Namespace) -> None:

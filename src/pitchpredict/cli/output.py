@@ -45,14 +45,41 @@ def _get_player_id(record: dict[str, Any]) -> str:
     return "N/A"
 
 
+def _spacer(compact: bool) -> None:
+    if not compact:
+        console.print()
+
+
+def _table_kwargs(compact: bool) -> dict[str, Any]:
+    if not compact:
+        return {}
+    return {
+        "padding": (0, 0),
+        "pad_edge": False,
+        "collapse_padding": True,
+    }
+
+
+def _panel_kwargs(compact: bool) -> dict[str, Any]:
+    if not compact:
+        return {}
+    return {"padding": (0, 1)}
+
+
 def _format_stats_table(
     data: dict[str, Any],
     title: str,
     key_style: str = "cyan",
     value_style: str = "white",
+    compact: bool = True,
 ) -> Table:
     """Format a flat stats dictionary as a Rich table."""
-    table = Table(title=title, show_header=True, header_style="bold")
+    table = Table(
+        title=title,
+        show_header=True,
+        header_style="bold",
+        **_table_kwargs(compact),
+    )
     table.add_column("Metric", style=key_style)
     table.add_column("Value", justify="right", style=value_style)
 
@@ -78,9 +105,10 @@ def _format_probs_table(
     title: str,
     key_header: str = "Type",
     key_style: str = "cyan",
+    compact: bool = True,
 ) -> Table:
     """Format a probability dictionary as a sorted Rich table."""
-    table = Table(title=title)
+    table = Table(title=title, **_table_kwargs(compact))
     table.add_column(key_header, style=key_style)
     table.add_column("Probability", justify="right", style="green")
 
@@ -94,6 +122,7 @@ def format_pitcher_prediction(
     response: "PredictPitcherResponse",
     format_type: str = "rich",
     verbose: bool = False,
+    compact: bool = True,
 ) -> None:
     """
     Format and display pitcher prediction results.
@@ -111,11 +140,13 @@ def format_pitcher_prediction(
     probs = basic.get("pitch_type_probs", {})
 
     # Main pitch type probabilities table
-    table = _format_probs_table(probs, "Pitch Type Probabilities", "Pitch Type")
+    table = _format_probs_table(
+        probs, "Pitch Type Probabilities", "Pitch Type", compact=compact
+    )
     console.print(table)
 
     # Velocity and location summary
-    console.print()
+    _spacer(compact)
     if speed_mean := basic.get("pitch_speed_mean"):
         speed_std = basic.get("pitch_speed_std", 0)
         console.print(
@@ -132,38 +163,47 @@ def format_pitcher_prediction(
     if response.basic_outcome_data:
         outcome_probs = response.basic_outcome_data.get("outcome_probs", {})
         if outcome_probs:
-            console.print()
+            _spacer(compact)
             table = _format_probs_table(
-                outcome_probs, "Outcome Probabilities", "Outcome", "yellow"
+                outcome_probs,
+                "Outcome Probabilities",
+                "Outcome",
+                "yellow",
+                compact=compact,
             )
             console.print(table)
 
     if verbose:
-        _format_pitcher_verbose(response)
+        _format_pitcher_verbose(response, compact=compact)
 
 
-def _format_pitcher_verbose(response: "PredictPitcherResponse") -> None:
+def _format_pitcher_verbose(
+    response: "PredictPitcherResponse", compact: bool = True
+) -> None:
     """Format verbose output for pitcher predictions."""
     detailed = response.detailed_pitch_data or {}
     outcome = response.detailed_outcome_data or {}
 
     # Fastball vs Offspeed breakdown
     if "pitch_prob_fastball" in detailed:
-        console.print()
+        _spacer(compact)
         console.print(
             Panel(
                 f"[bold]Fastball:[/bold] {detailed['pitch_prob_fastball']:.1%}    "
                 f"[bold]Offspeed:[/bold] {detailed['pitch_prob_offspeed']:.1%}",
                 title="[cyan]Pitch Category Breakdown[/cyan]",
                 border_style="blue",
+                **_panel_kwargs(compact),
             )
         )
 
     # Fastball details
     if fastball_data := detailed.get("pitch_data_fastballs"):
-        console.print()
+        _spacer(compact)
         if fb_probs := fastball_data.get("pitch_type_probs"):
-            console.print(_format_probs_table(fb_probs, "Fastball Types", "Type"))
+            console.print(
+                _format_probs_table(fb_probs, "Fastball Types", "Type", compact=compact)
+            )
 
         fb_stats = {
             k: v
@@ -171,13 +211,19 @@ def _format_pitcher_verbose(response: "PredictPitcherResponse") -> None:
             if k != "pitch_type_probs" and not isinstance(v, dict)
         }
         if fb_stats:
-            console.print(_format_stats_table(fb_stats, "Fastball Metrics"))
+            console.print(
+                _format_stats_table(fb_stats, "Fastball Metrics", compact=compact)
+            )
 
     # Offspeed details
     if offspeed_data := detailed.get("pitch_data_offspeed"):
-        console.print()
+        _spacer(compact)
         if os_probs := offspeed_data.get("pitch_type_probs"):
-            console.print(_format_probs_table(os_probs, "Offspeed Types", "Type"))
+            console.print(
+                _format_probs_table(
+                    os_probs, "Offspeed Types", "Type", compact=compact
+                )
+            )
 
         os_stats = {
             k: v
@@ -185,19 +231,23 @@ def _format_pitcher_verbose(response: "PredictPitcherResponse") -> None:
             if k != "pitch_type_probs" and not isinstance(v, dict)
         }
         if os_stats:
-            console.print(_format_stats_table(os_stats, "Offspeed Metrics"))
+            console.print(
+                _format_stats_table(os_stats, "Offspeed Metrics", compact=compact)
+            )
 
     # Swing data
     if swing_data := outcome.get("swing_data"):
-        console.print()
-        console.print(_format_stats_table(swing_data, "Swing Metrics"))
+        _spacer(compact)
+        console.print(_format_stats_table(swing_data, "Swing Metrics", compact=compact))
 
     # Contact data
     if contact_data := outcome.get("contact_data"):
-        console.print()
+        _spacer(compact)
         if bb_probs := contact_data.get("bb_type_probs"):
             console.print(
-                _format_probs_table(bb_probs, "Batted Ball Types", "Type", "yellow")
+                _format_probs_table(
+                    bb_probs, "Batted Ball Types", "Type", "yellow", compact=compact
+                )
             )
 
         contact_stats = {
@@ -206,11 +256,13 @@ def _format_pitcher_verbose(response: "PredictPitcherResponse") -> None:
             if k != "bb_type_probs" and not isinstance(v, dict)
         }
         if contact_stats:
-            console.print(_format_stats_table(contact_stats, "Contact Metrics"))
+            console.print(
+                _format_stats_table(contact_stats, "Contact Metrics", compact=compact)
+            )
 
     # Metadata
     if response.prediction_metadata:
-        console.print()
+        _spacer(compact)
         meta = response.prediction_metadata
         console.print(
             Panel(
@@ -220,6 +272,7 @@ def _format_pitcher_verbose(response: "PredictPitcherResponse") -> None:
                 f"({meta.get('sample_pctg', 0):.1%})",
                 title="[dim]Prediction Metadata[/dim]",
                 border_style="dim",
+                **_panel_kwargs(compact),
             )
         )
 
@@ -228,6 +281,7 @@ def format_batter_prediction(
     response: dict[str, Any],
     format_type: str = "rich",
     verbose: bool = False,
+    compact: bool = True,
 ) -> None:
     """
     Format and display batter prediction results.
@@ -241,18 +295,23 @@ def format_batter_prediction(
 
     if outcome_probs:
         table = _format_probs_table(
-            outcome_probs, "Batter Outcome Probabilities", "Outcome", "yellow"
+            outcome_probs,
+            "Batter Outcome Probabilities",
+            "Outcome",
+            "yellow",
+            compact=compact,
         )
         console.print(table)
 
     if verbose and (detailed := response.get("detailed_outcome_data")):
-        _format_detailed_outcome(detailed)
+        _format_detailed_outcome(detailed, compact=compact)
 
 
 def format_batted_ball_prediction(
     response: dict[str, Any],
     format_type: str = "rich",
     verbose: bool = False,
+    compact: bool = True,
 ) -> None:
     """
     Format and display batted ball prediction results.
@@ -266,18 +325,24 @@ def format_batted_ball_prediction(
 
     if outcome_probs:
         table = _format_probs_table(
-            outcome_probs, "Batted Ball Outcome Probabilities", "Outcome", "yellow"
+            outcome_probs,
+            "Batted Ball Outcome Probabilities",
+            "Outcome",
+            "yellow",
+            compact=compact,
         )
         console.print(table)
 
     if verbose and (detailed := response.get("detailed_outcome_data")):
-        _format_detailed_outcome(detailed)
+        _format_detailed_outcome(detailed, compact=compact)
 
 
-def _format_detailed_outcome(detailed: dict[str, Any]) -> None:
+def _format_detailed_outcome(
+    detailed: dict[str, Any], compact: bool = True
+) -> None:
     """Format detailed outcome data with proper handling of nested structures."""
     for section_name, section_data in detailed.items():
-        console.print()
+        _spacer(compact)
         if isinstance(section_data, dict):
             # Check for probability sub-dicts
             prob_keys = [k for k in section_data if "prob" in k.lower()]
@@ -288,7 +353,9 @@ def _format_detailed_outcome(detailed: dict[str, Any]) -> None:
                         f"{prob_key.replace('_', ' ').title()}"
                     )
                     console.print(
-                        _format_probs_table(section_data[prob_key], title, "Type")
+                        _format_probs_table(
+                            section_data[prob_key], title, "Type", compact=compact
+                        )
                     )
 
             # Format remaining stats
@@ -299,7 +366,7 @@ def _format_detailed_outcome(detailed: dict[str, Any]) -> None:
             }
             if stats:
                 title = section_name.replace("_", " ").title()
-                console.print(_format_stats_table(stats, title))
+                console.print(_format_stats_table(stats, title, compact=compact))
         elif isinstance(section_data, float):
             console.print(f"[bold]{section_name}:[/bold] {section_data:.3f}")
         else:
@@ -309,6 +376,7 @@ def _format_detailed_outcome(detailed: dict[str, Any]) -> None:
 def format_player_results(
     results: list[dict[str, Any]],
     format_type: str = "rich",
+    compact: bool = True,
 ) -> None:
     """
     Format and display player lookup results.
@@ -321,7 +389,7 @@ def format_player_results(
         console.print("[yellow]No players found.[/yellow]")
         return
 
-    table = Table(title="Player Search Results")
+    table = Table(title="Player Search Results", **_table_kwargs(compact))
     table.add_column("Name", style="cyan")
     table.add_column("MLBAM ID", justify="right", style="green")
     table.add_column("Years Active", style="yellow")
@@ -351,6 +419,7 @@ def format_player_info(
     record: dict[str, Any],
     mlbam_id: int,
     format_type: str = "rich",
+    compact: bool = True,
 ) -> None:
     """
     Format and display detailed player information.
@@ -401,7 +470,10 @@ def format_player_info(
         panel_content.append(f"[bold]Birth Date:[/bold] {birth_date}")
 
     panel = Panel(
-        "\n".join(panel_content), title=f"[cyan]{name}[/cyan]", border_style="blue"
+        "\n".join(panel_content),
+        title=f"[cyan]{name}[/cyan]",
+        border_style="blue",
+        **_panel_kwargs(compact),
     )
     console.print(panel)
 
@@ -410,6 +482,7 @@ def format_cache_status(
     cache_dir: str,
     stats: dict[str, Any],
     format_type: str = "rich",
+    compact: bool = True,
 ) -> None:
     """
     Format and display cache status information.
@@ -424,10 +497,11 @@ def format_cache_status(
             f"[bold]Total Size:[/bold] {_format_size(stats.get('total_size', 0))}",
             title="[cyan]PitchPredict Cache Status[/cyan]",
             border_style="blue",
+            **_panel_kwargs(compact),
         )
     )
 
-    table = Table()
+    table = Table(**_table_kwargs(compact))
     table.add_column("Category", style="cyan")
     table.add_column("Files", justify="right", style="green")
     table.add_column("Size", justify="right", style="yellow")
