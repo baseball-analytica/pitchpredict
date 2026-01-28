@@ -62,6 +62,11 @@ def _add_lookup_parser(subparsers: argparse._SubParsersAction) -> None:
         default="rich",
         help="Output format (default: rich)",
     )
+    parser.add_argument(
+        "--no-compact",
+        action="store_false",
+        help="Do not compact the console output",
+    )
     parser.set_defaults(func=handle_player_lookup)
 
 
@@ -85,6 +90,11 @@ def _add_info_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=["rich", "json"],
         default="rich",
         help="Output format (default: rich)",
+    )
+    parser.add_argument(
+        "--no-compact",
+        action="store_false",
+        help="Do not compact the console output",
     )
     parser.set_defaults(func=handle_player_info)
 
@@ -111,7 +121,11 @@ def handle_player_lookup(args: argparse.Namespace) -> None:
 
     try:
         results = run_async(_run())
-        format_player_results(results, format_type=args.format)
+        format_player_results(
+            results,
+            format_type=args.format,
+            compact=not args.no_compact,
+        )
     except HTTPException as e:
         error_console.print(f"[red]Error:[/red] {e.detail}")
         sys.exit(1)
@@ -137,7 +151,12 @@ def handle_player_info(args: argparse.Namespace) -> None:
 
     try:
         record = run_async(_run())
-        format_player_info(record, args.mlbam_id, format_type=args.format)
+        format_player_info(
+            record,
+            args.mlbam_id,
+            format_type=args.format,
+            compact=not args.no_compact,
+        )
     except HTTPException as e:
         error_console.print(f"[red]Error:[/red] {e.detail}")
         sys.exit(1)

@@ -97,6 +97,11 @@ def _add_pitcher_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Output format (default: rich)",
     )
     parser.add_argument(
+        "--no-compact",
+        action="store_true",
+        help="Do not compact the console output",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -188,6 +193,11 @@ def _add_batter_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Output format (default: rich)",
     )
     parser.add_argument(
+        "--no-compact",
+        action="store_true",
+        help="Do not compact the console output",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -260,6 +270,11 @@ def _add_batted_ball_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Output format (default: rich)",
     )
     parser.add_argument(
+        "--no-compact",
+        action="store_true",
+        help="Do not compact the console output",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -298,7 +313,12 @@ def handle_predict_pitcher(args: argparse.Namespace) -> None:
 
     try:
         result = run_async(_run())
-        format_pitcher_prediction(result, format_type=args.format, verbose=args.verbose)
+        format_pitcher_prediction(
+            result,
+            format_type=args.format,
+            verbose=args.verbose,
+            compact=not args.no_compact,
+        )
     except HTTPException as e:
         error_console.print(f"[red]Error:[/red] {e.detail}")
         sys.exit(1)
@@ -340,7 +360,12 @@ def handle_predict_batter(args: argparse.Namespace) -> None:
 
     try:
         result = run_async(_run())
-        format_batter_prediction(result, format_type=args.format, verbose=args.verbose)
+        format_batter_prediction(
+            result,
+            format_type=args.format,
+            verbose=args.verbose,
+            compact=not args.no_compact,
+        )
     except HTTPException as e:
         error_console.print(f"[red]Error:[/red] {e.detail}")
         sys.exit(1)
@@ -377,7 +402,10 @@ def handle_predict_batted_ball(args: argparse.Namespace) -> None:
     try:
         result = run_async(_run())
         format_batted_ball_prediction(
-            result, format_type=args.format, verbose=args.verbose
+            result,
+            format_type=args.format,
+            verbose=args.verbose,
+            compact=not args.no_compact,
         )
     except HTTPException as e:
         error_console.print(f"[red]Error:[/red] {e.detail}")
