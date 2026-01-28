@@ -22,7 +22,7 @@ from pitchpredict.backend.algs.xlstm.predictor import (
     generate_pitches,
 )
 from pitchpredict.backend.algs.xlstm.decoding import aggregate_pitch_stats
-from pitchpredict.backend.algs.xlstm.tokens import PitchToken
+from pitchpredict.backend.algs.xlstm.tokens import PitchToken, TokenCategory
 from pitchpredict.backend.algs.xlstm.model import BaseballxLSTM, ModelConfig
 import pitchpredict.types.api as api_types
 
@@ -340,7 +340,13 @@ class XlstmAlgorithm(PitchPredictAlgorithm):
     ) -> dict[str, Any]:
         """Build basic_outcome_data from decoded samples."""
         if not decoded_pitches:
-            return {"outcome_probs": {}}
+            return {
+                "outcome_probs": {},
+                "swing_probability": 0.0,
+                "swing_event_probs": {},
+                "contact_probability": 0.0,
+                "contact_event_probs": {},
+            }
 
         # Count results
         result_counts: dict[str, int] = {}
@@ -353,14 +359,14 @@ class XlstmAlgorithm(PitchPredictAlgorithm):
         # Map to outcome categories (S=strike, B=ball, X=contact)
         ball_results = {
             "ball", "ball_in_dirt", "blocked_ball", "automatic_ball",
-            "intentional_ball", "pitchout",
+            "intentional_ball", "pitchout", "hit_by_pitch",
         }
         strike_results = {
             "called_strike", "swinging_strike", "swinging_strike_blocked",
             "swinging_pitchout", "foul_tip", "automatic_strike",
             "foul", "foul_bunt", "bunt_foul_tip", "foul_pitchout", "missed_bunt",
         }
-        contact_results = {"hit_into_play", "hit_by_pitch"}
+        contact_results = {"hit_into_play"}
 
         ball_count = sum(result_counts.get(r, 0) for r in ball_results)
         strike_count = sum(result_counts.get(r, 0) for r in strike_results)
@@ -484,6 +490,7 @@ class XlstmAlgorithm(PitchPredictAlgorithm):
                 history_context=packed_ctx,
                 config=gen_config,
                 device=device,
+                force_first_category=TokenCategory.PITCH_TYPE if seq_result.pa_open else None,
             )
 
             # Build response

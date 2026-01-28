@@ -51,9 +51,10 @@ def test_build_history_sequence_preserves_order_and_adds_session_end() -> None:
     tokens = result.tokens
 
     assert tokens[0] == PitchToken.SESSION_START.value
-    assert tokens[-1] == PitchToken.SESSION_END.value
+    assert tokens[-1] != PitchToken.SESSION_END.value
+    assert result.pa_open is True
     assert tokens.count(PitchToken.PA_START.value) == 2
-    assert tokens.count(PitchToken.PA_END.value) == 2
+    assert tokens.count(PitchToken.PA_END.value) == 1
 
     first_pa_start = tokens.index(PitchToken.PA_START.value)
     second_pa_start = tokens.index(PitchToken.PA_START.value, first_pa_start + 1)

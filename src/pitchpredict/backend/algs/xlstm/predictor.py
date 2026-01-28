@@ -30,7 +30,12 @@ class GenerationConfig:
     top_p: float | None = None  # Nucleus sampling (not used if None)
 
 
-def create_grammar_mask(last_token_id: int, vocab_size: int, device: torch.device) -> torch.Tensor:
+def create_grammar_mask(
+    last_token_id: int,
+    vocab_size: int,
+    device: torch.device,
+    force_category: TokenCategory | None = None,
+) -> torch.Tensor:
     """Create a mask that allows only grammatically valid next tokens.
 
     Args:
@@ -41,7 +46,12 @@ def create_grammar_mask(last_token_id: int, vocab_size: int, device: torch.devic
     Returns:
         Boolean tensor of shape [vocab_size] where True = valid token
     """
-    valid_ids = [v for v in valid_next_token_ids(last_token_id) if v < vocab_size]
+    if force_category is not None:
+        valid_ids = [
+            t.value for t in get_tokens_in_category(force_category) if t.value < vocab_size
+        ]
+    else:
+        valid_ids = [v for v in valid_next_token_ids(last_token_id) if v < vocab_size]
     mask = torch.zeros(vocab_size, dtype=torch.bool, device=device)
     if valid_ids:
         mask[valid_ids] = True
@@ -179,6 +189,7 @@ def generate_pitches(
     config: GenerationConfig,
     device: torch.device,
     return_logits: bool = False,
+    force_first_category: TokenCategory | None = None,
 ) -> GenerationResult:
     """Generate pitch samples using autoregressive decoding.
 
@@ -188,6 +199,7 @@ def generate_pitches(
         history_context: Context tensors for history [1, history_len]
         config: Generation configuration
         device: Target device
+        force_first_category: If set, force step-0 sampling to use this token category
 
     Returns:
         GenerationResult with generated pitches and statistics
@@ -233,7 +245,12 @@ def generate_pitches(
         # Create and apply grammar mask
         # All samples have the same last token at each step, so use the first sample's
         current_last_token = int(tokens[0, -1].item())
-        grammar_mask = create_grammar_mask(current_last_token, vocab_size, device)
+        grammar_mask = create_grammar_mask(
+            current_last_token,
+            vocab_size,
+            device,
+            force_category=force_first_category if step == 0 else None,
+        )
         masked_logits = apply_grammar_mask(last_logits, grammar_mask)
 
         # Sample next token
