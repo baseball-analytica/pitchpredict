@@ -297,10 +297,10 @@ def handle_cache_warm(args: argparse.Namespace) -> None:
             try:
                 # Use a dummy pitcher and simulate a pitch
                 await api.predict_batter(
-                    batter_name=str(player_id),
-                    pitcher_name="592789",  # Corbin Burnes as a common pitcher
-                    balls=0,
-                    strikes=0,
+                    pitcher_id=592789,  # Corbin Burnes as a common pitcher
+                    batter_id=player_id,
+                    count_balls=0,
+                    count_strikes=0,
                     score_bat=0,
                     score_fld=0,
                     game_date=today,

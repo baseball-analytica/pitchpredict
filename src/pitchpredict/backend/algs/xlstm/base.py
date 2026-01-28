@@ -534,17 +534,7 @@ class XlstmAlgorithm(PitchPredictAlgorithm):
 
     async def predict_batter(
         self,
-        batter_name: str,
-        pitcher_name: str,
-        balls: int,
-        strikes: int,
-        score_bat: int,
-        score_fld: int,
-        game_date: str,
-        pitch_type: str,
-        pitch_speed: float,
-        pitch_x: float,
-        pitch_z: float,
+        request: api_types.PredictBatterRequest,
     ) -> dict[str, Any]:
         """Predict the batter's next outcome (not implemented for xLSTM)."""
         raise HTTPException(

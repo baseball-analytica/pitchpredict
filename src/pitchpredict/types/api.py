@@ -2,7 +2,7 @@
 # Copyright (c) 2025 Addison Kline
 
 from typing import Any, Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Pitch(BaseModel):
@@ -100,21 +100,53 @@ class PredictPitcherResponse(BaseModel):
 
 
 class PredictBatterRequest(BaseModel):
-    batter_name: str
-    pitcher_name: str
-    balls: int
-    strikes: int
-    score_bat: int
-    score_fld: int
-    game_date: str
+    """
+    Predict batter outcome request.
+
+    Includes the same context fields used by xLSTM/predict_pitcher plus
+    the pitch parameters required for batter similarity scoring.
+    """
+
+    pitcher_id: int
+    batter_id: int
     pitch_type: str
     pitch_speed: float
     pitch_x: float
     pitch_z: float
-    algorithm: str
+    prev_pitches: list[Pitch] | None = None
+    algorithm: str = "similarity"
+    sample_size: int = 1  # how many pitches should the algorithm generate?
+    # optional context fields (same as PredictPitcherRequest)
+    pitcher_age: int | None = None
+    pitcher_throws: Literal["L", "R"] | None = None
+    batter_age: int | None = None
+    batter_hits: Literal["L", "R"] | None = None
+    count_balls: int | None = None
+    count_strikes: int | None = None
+    outs: int | None = None
+    bases_state: int | None = None
+    score_bat: int | None = None
+    score_fld: int | None = None
+    inning: int | None = None
+    pitch_number: int | None = None
+    number_through_order: int | None = None
+    game_date: str | None = None
+    fielder_2_id: int | None = None
+    fielder_3_id: int | None = None
+    fielder_4_id: int | None = None
+    fielder_5_id: int | None = None
+    fielder_6_id: int | None = None
+    fielder_7_id: int | None = None
+    fielder_8_id: int | None = None
+    fielder_9_id: int | None = None
+    batter_days_since_prev_game: int | None = None
+    pitcher_days_since_prev_game: int | None = None
+    strike_zone_top: float | None = None
+    strike_zone_bottom: float | None = None
 
 
 class PredictBatterResponse(BaseModel):
+    algorithm_metadata: dict[str, Any] = Field(default_factory=dict)
     basic_outcome_data: dict[str, Any]
     detailed_outcome_data: dict[str, Any]
     prediction_metadata: dict[str, Any]

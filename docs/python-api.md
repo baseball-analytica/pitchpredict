@@ -173,37 +173,60 @@ Predict the batter's outcome given a specific pitch.
 
 ```python
 async def predict_batter(
-    batter_name: str,
-    pitcher_name: str,
-    balls: int,
-    strikes: int,
-    score_bat: int,
-    score_fld: int,
-    game_date: str,
+    pitcher_id: int,
+    batter_id: int,
     pitch_type: str,
     pitch_speed: float,
     pitch_x: float,
     pitch_z: float,
-    algorithm: str,
-) -> dict[str, Any]
+    prev_pitches: list[Pitch] | None = None,
+    algorithm: str = "similarity",
+    sample_size: int = 1,
+    pitcher_age: int | None = None,
+    pitcher_throws: Literal["L", "R"] | None = None,
+    batter_age: int | None = None,
+    batter_hits: Literal["L", "R"] | None = None,
+    count_balls: int | None = None,
+    count_strikes: int | None = None,
+    outs: int | None = None,
+    bases_state: int | None = None,
+    score_bat: int | None = None,
+    score_fld: int | None = None,
+    inning: int | None = None,
+    pitch_number: int | None = None,
+    number_through_order: int | None = None,
+    game_date: str | None = None,
+    fielder_2_id: int | None = None,
+    fielder_3_id: int | None = None,
+    fielder_4_id: int | None = None,
+    fielder_5_id: int | None = None,
+    fielder_6_id: int | None = None,
+    fielder_7_id: int | None = None,
+    fielder_8_id: int | None = None,
+    fielder_9_id: int | None = None,
+    batter_days_since_prev_game: int | None = None,
+    pitcher_days_since_prev_game: int | None = None,
+    strike_zone_top: float | None = None,
+    strike_zone_bottom: float | None = None,
+) -> PredictBatterResponse
 ```
 
 #### Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `batter_name` | `str` | Batter's name |
-| `pitcher_name` | `str` | Pitcher's name |
-| `balls` | `int` | Current ball count (0-3) |
-| `strikes` | `int` | Current strike count (0-2) |
-| `score_bat` | `int` | Batting team's score |
-| `score_fld` | `int` | Fielding team's score |
-| `game_date` | `str` | Game date in "YYYY-MM-DD" format |
+| `pitcher_id` | `int` | MLBAM pitcher ID |
+| `batter_id` | `int` | MLBAM batter ID |
 | `pitch_type` | `str` | Pitch type code (e.g., "FF", "SL") |
 | `pitch_speed` | `float` | Pitch speed in mph |
 | `pitch_x` | `float` | Horizontal location at plate (feet from center) |
 | `pitch_z` | `float` | Vertical location at plate (feet from ground) |
+| `prev_pitches` | `list[Pitch] \| None` | Reserved for xLSTM (not used for batter predictions yet) |
 | `algorithm` | `str` | Algorithm to use: `"similarity"` |
+| `sample_size` | `int` | Number of pitches to sample |
+| `game_date` | `str \| None` | Game date in "YYYY-MM-DD" format |
+
+Additional optional context fields match `predict_pitcher` (count, bases, score, inning, fielders, rest days, strike zone bounds).
 
 #### Returns
 
@@ -225,25 +248,25 @@ async def main():
     client = PitchPredict()
 
     result = await client.predict_batter(
-        batter_name="Aaron Judge",
-        pitcher_name="Clayton Kershaw",
-        balls=1,
-        strikes=2,
-        score_bat=2,
-        score_fld=1,
+        pitcher_id=477132,
+        batter_id=592450,
         game_date="2024-06-15",
         pitch_type="FF",
         pitch_speed=95.0,
         pitch_x=0.5,
         pitch_z=2.5,
+        count_balls=1,
+        count_strikes=2,
+        score_bat=2,
+        score_fld=1,
         algorithm="similarity"
     )
 
     # Swing probability
-    print(result["basic_outcome_data"]["swing_probability"])
+    print(result.basic_outcome_data["swing_probability"])
 
     # Contact event probabilities
-    print(result["basic_outcome_data"]["contact_event_probs"])
+    print(result.basic_outcome_data["contact_event_probs"])
 
 asyncio.run(main())
 ```

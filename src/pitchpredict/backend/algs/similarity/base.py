@@ -13,7 +13,6 @@ from pitchpredict.backend.caching import PitchPredictCache
 from pitchpredict.backend.fetching import (
     get_pitches_from_pitcher,
     get_pitches_to_batter,
-    get_player_id_from_name,
     get_all_batted_balls,
 )
 import pitchpredict.types.api as api_types
@@ -294,17 +293,7 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
 
     async def predict_batter(
         self,
-        batter_name: str,
-        pitcher_name: str,
-        balls: int,
-        strikes: int,
-        score_bat: int,
-        score_fld: int,
-        game_date: str,
-        pitch_type: str,
-        pitch_speed: float,
-        pitch_x: float,
-        pitch_z: float,
+        request: api_types.PredictBatterRequest,
     ) -> dict[str, Any]:
         """
         Predict the batter's next outcome.
@@ -315,13 +304,18 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             start_time = datetime.now()
             self.logger.debug(f"start time: {start_time}")
 
-            pitcher_id = await get_player_id_from_name(pitcher_name, cache=self.cache)
-            batter_id = await get_player_id_from_name(batter_name, cache=self.cache)
+            pitcher_id = request.pitcher_id
+            batter_id = request.batter_id
+            if pitcher_id is None or batter_id is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="pitcher_id and batter_id are required for batter predictions",
+                )
 
             pitches = await get_pitches_to_batter(
                 batter_id=batter_id,
                 start_date="2015-01-01",
-                end_date=game_date,
+                end_date=request.game_date,
                 columns=list(self.BATTER_PITCH_COLUMNS),
                 cache=self.cache,
             )
@@ -331,15 +325,15 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
             similar_pitches = await self._get_similar_pitches_for_batter(
                 pitches=pitches,
                 pitcher_id=pitcher_id,
-                balls=balls,
-                strikes=strikes,
-                score_bat=score_bat,
-                score_fld=score_fld,
-                game_date=game_date,
-                pitch_type=pitch_type,
-                pitch_speed=pitch_speed,
-                pitch_x=pitch_x,
-                pitch_z=pitch_z,
+                balls=request.count_balls,
+                strikes=request.count_strikes,
+                score_bat=request.score_bat,
+                score_fld=request.score_fld,
+                game_date=request.game_date,
+                pitch_type=request.pitch_type,
+                pitch_speed=request.pitch_speed,
+                pitch_x=request.pitch_x,
+                pitch_z=request.pitch_z,
                 sample_pctg=sample_pctg,
             )
             self.logger.debug(
@@ -529,11 +523,11 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         self,
         pitches: pd.DataFrame,
         pitcher_id: int,
-        balls: int,
-        strikes: int,
-        score_bat: int,
-        score_fld: int,
-        game_date: str,
+        balls: int | None,
+        strikes: int | None,
+        score_bat: int | None,
+        score_fld: int | None,
+        game_date: str | None,
         pitch_type: str,
         pitch_speed: float,
         pitch_x: float,
@@ -546,29 +540,22 @@ class SimilarityAlgorithm(PitchPredictAlgorithm):
         self.logger.debug("get_similar_pitches_for_batter called")
 
         try:
+            def score_equal(column: str, target: Any | None) -> pd.Series:
+                if target is None or column not in pitches.columns:
+                    return pd.Series(0.0, index=pitches.index)
+                return pitches[column].eq(target).astype(float)
+
             # append "similarity score" column to pitches for each parameter
-            pitches["score_pitcher_name"] = (
-                pitches["pitcher"].eq(pitcher_id).astype(float)
-            )
-            pitches["score_balls"] = pitches["balls"].eq(balls).astype(float)
-            pitches["score_strikes"] = pitches["strikes"].eq(strikes).astype(float)
-            pitches["score_score_bat"] = (
-                pitches["bat_score"].eq(score_bat).astype(float)
-            )
-            pitches["score_score_fld"] = (
-                pitches["fld_score"].eq(score_fld).astype(float)
-            )
-            pitches["score_game_date"] = (
-                pitches["game_date"].eq(game_date).astype(float)
-            )
-            pitches["score_pitch_type"] = (
-                pitches["pitch_type"].eq(pitch_type).astype(float)
-            )
-            pitches["score_pitch_speed"] = (
-                pitches["release_speed"].eq(pitch_speed).astype(float)
-            )
-            pitches["score_pitch_x"] = pitches["plate_x"].eq(pitch_x).astype(float)
-            pitches["score_pitch_z"] = pitches["plate_z"].eq(pitch_z).astype(float)
+            pitches["score_pitcher_name"] = score_equal("pitcher", pitcher_id)
+            pitches["score_balls"] = score_equal("balls", balls)
+            pitches["score_strikes"] = score_equal("strikes", strikes)
+            pitches["score_score_bat"] = score_equal("bat_score", score_bat)
+            pitches["score_score_fld"] = score_equal("fld_score", score_fld)
+            pitches["score_game_date"] = score_equal("game_date", game_date)
+            pitches["score_pitch_type"] = score_equal("pitch_type", pitch_type)
+            pitches["score_pitch_speed"] = score_equal("release_speed", pitch_speed)
+            pitches["score_pitch_x"] = score_equal("plate_x", pitch_x)
+            pitches["score_pitch_z"] = score_equal("plate_z", pitch_z)
 
             # create a single similarity score: a weighted average of the individual similarity scores above
             pitches["similarity_score"] = (
