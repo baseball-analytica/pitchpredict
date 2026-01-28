@@ -318,3 +318,16 @@ uv run torchrun --standalone --nproc_per_node=6 tools/xlstm.py  # For distribute
 | No xLSTM weights available | similarity |
 
 The similarity algorithm is the default and works out of the box. The xLSTM algorithm uses a pre-trained checkpoint (auto-download or local).
+
+---
+
+## Further Reading
+
+For a comprehensive deep dive into the similarity algorithm, see the [Similarity Algorithm Documentation](similarity/index.md), which covers:
+
+- [Pitcher Prediction](similarity/pitcher-prediction.md) - Detailed workflow, scoring, and debugging
+- [Batter Prediction](similarity/batter-prediction.md) - Differences from pitcher mode
+- [Batted Ball Prediction](similarity/batted-ball.md) - Continuous scoring and context filtering
+- [Data Columns Reference](similarity/data-columns.md) - All Statcast columns used
+- [Configuration Guide](similarity/configuration.md) - Customizing weights and tuning
+- [Code Examples](similarity/examples.md) - Python and REST API examples
