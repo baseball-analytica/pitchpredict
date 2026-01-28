@@ -80,7 +80,7 @@ Many prediction commands share these flags:
 | `--verbose` | `false` | Show detailed output when available |
 | `--algorithm` | `similarity` | Algorithm to use (`similarity` by default) |
 
-> Note: The CLI is configured with the similarity algorithm by default. If you pass `--algorithm deep`, you must supply a configured deep model in code; otherwise the command will fail with "unrecognized algorithm".
+> Note: The CLI defaults to the similarity algorithm. If you choose `--algorithm xlstm`, the CLI uses a cold-start request (`prev_pitches=[]`).
 
 ### predict pitcher
 

@@ -15,12 +15,12 @@ PitchPredict is cutting-edge MLB pitch prediction software that predicts pitcher
 - [Python API Reference](python-api.md) - `PitchPredict` class documentation
 - [REST API Reference](rest-api.md) - FastAPI server endpoints
 - [CLI Reference](cli.md) - Command-line interface
-- [Algorithms](algorithms.md) - Similarity and deep learning algorithms
+- [Algorithms](algorithms.md) - Similarity and xLSTM algorithms
 - [Caching](caching.md) - Cache behavior and storage layout
 
 ## Features
 
-- **Two prediction algorithms**: Similarity-based (nearest neighbor) and deep learning (xLSTM)
+- **Two prediction algorithms**: Similarity-based (nearest neighbor) and xLSTM sequence model
 - **Multiple interfaces**: Python API, REST API server, and CLI
 - **Rich data output**: Pitch type probabilities, speed/location distributions, outcome predictions
 - **Disk-backed caching**: Parquet cache with incremental Statcast updates
@@ -33,6 +33,8 @@ PitchPredict is cutting-edge MLB pitch prediction software that predicts pitcher
 ```bash
 uv pip install pitchpredict
 ```
+
+Weights download automatically on first use for xLSTM.
 
 ### Python API
 

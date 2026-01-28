@@ -2,9 +2,9 @@
 
 """
 Split an on-disk PitchPredict dataset into train/val/test partitions by plate
-appearance while keeping the binary format produced by PitchDataset.save.
+appearance while keeping the binary format produced by build_dataset_vectorized.
 
-uv run scripts/split_pitch_dataset.py --tokens-path /raid/kline/pitchpredict/.pitchpredict_data/pitch_seq.bin --context-prefix /raid/kline/pitchpredict/.pitchpredict_data/pitch_context --overwrite
+uv run python -m tools.split_pitch_dataset --tokens-path /raid/kline/pitchpredict/.pitchpredict_data/pitch_seq.bin --context-prefix /raid/kline/pitchpredict/.pitchpredict_data/pitch_context --overwrite
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ SRC_PATH = REPO_ROOT / "src"
 if SRC_PATH.exists() and str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from pitchpredict.backend.algs.deep.split import split_saved_dataset  # noqa: E402
+from tools.deep.split import split_saved_dataset  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
         "--tokens-path",
         type=Path,
         default=REPO_ROOT / ".pitchpredict_data" / "pitch_seq.bin",
-        help="Path to the packed token binary produced by PitchDataset.save (default: %(default)s).",
+        help="Path to the packed token binary produced by build_dataset_vectorized (default: %(default)s).",
     )
     parser.add_argument(
         "--context-prefix",

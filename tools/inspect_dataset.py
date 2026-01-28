@@ -27,13 +27,13 @@ SRC_PATH = REPO_ROOT / "src"
 if SRC_PATH.exists():
     sys.path.insert(0, str(SRC_PATH))
 
-from pitchpredict.backend.algs.deep.types import (
+from tools.deep.types import (
     PitchToken,
     TokenCategory,
     get_category,
     get_tokens_in_category,
 )
-from pitchpredict.backend.algs.deep.nn import (
+from tools.deep.nn import (
     _CONTEXT_FIELD_SPECS,
     _context_field_path,
     TOKEN_DTYPE,
@@ -89,7 +89,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default="/raid/kline/pitchpredict/.pitchpredict_data",
+        default="/raid/kline/pitchpredict/.pitchpredict_session_data",
         help="Base data directory (default: %(default)s).",
     )
     parser.add_argument(
@@ -253,7 +253,7 @@ def print_split_summary(stats: SplitStats) -> None:
     )
 
 
-def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
+def print_combined_stats(all_stats: list[SplitStats], top_n: int, args: argparse.Namespace) -> None:
     """Print combined statistics across all splits."""
     print(f"\n{'=' * 60}")
     print(f"  COMBINED STATISTICS")
@@ -288,6 +288,36 @@ def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
     if session_count > 0:
         print(f"Sessions: {format_number(session_count)}")
 
+    # Compute session length statistics
+    all_session_lengths: list[int] = []
+    for stats in all_stats:
+        split_dir = get_split_dir(Path(args.data_dir), stats.name)
+        tokens = load_tokens(split_dir)
+        if tokens is not None:
+            # Find SESSION_START positions
+            session_starts = np.where(tokens == PitchToken.SESSION_START.value)[0]
+            if len(session_starts) > 1:
+                # Session length = distance between consecutive SESSION_STARTs
+                lengths = np.diff(session_starts)
+                all_session_lengths.extend(lengths.tolist())
+            # Add length of last session (from last SESSION_START to end or SESSION_END)
+            if len(session_starts) > 0:
+                last_start = session_starts[-1]
+                # Find next SESSION_END after last SESSION_START
+                session_ends_after = np.where(tokens[last_start:] == PitchToken.SESSION_END.value)[0]
+                if len(session_ends_after) > 0:
+                    last_len = session_ends_after[0] + 1  # +1 to include SESSION_END
+                    all_session_lengths.append(last_len)
+
+    if all_session_lengths:
+        lengths_arr = np.array(all_session_lengths)
+        print(f"\n--- Session Length Statistics ---")
+        print(f"  Min: {format_number(int(lengths_arr.min()))} tokens")
+        print(f"  Max: {format_number(int(lengths_arr.max()))} tokens")
+        print(f"  Mean: {lengths_arr.mean():.1f} tokens")
+        print(f"  Median: {format_number(int(np.median(lengths_arr)))} tokens")
+        print(f"  Std Dev: {lengths_arr.std():.1f} tokens")
+
     # Token distribution
     print(f"\n--- Token Distribution by Category ---")
     for category in TokenCategory:
@@ -317,6 +347,29 @@ def print_combined_stats(all_stats: list[SplitStats], top_n: int) -> None:
             for s in all_stats
         )
         print(f"  {field_name}: {format_number(total_unique)} unique")
+
+    # Compute total unique fielder IDs across all fielder positions (fast method)
+    fielder_fields = [f"fielder_{i}_id" for i in range(2, 10)]
+    unique_arrays: list[np.ndarray] = []
+    for stats in all_stats:
+        split_dir = get_split_dir(Path(args.data_dir), stats.name)
+        context_prefix = split_dir / "pitch_context"
+        for field_name in fielder_fields:
+            if field_name in stats.context_stats:
+                path = _context_field_path(str(context_prefix), field_name)
+                if os.path.exists(path):
+                    spec = _CONTEXT_FIELD_SPECS[field_name]
+                    data = np.memmap(path, dtype=spec.dtype, mode="r")
+                    # Use np.unique which is much faster than .tolist() + set
+                    unique_arrays.append(np.unique(data))
+    # Combine all unique arrays and get final unique count
+    if unique_arrays:
+        all_unique = np.unique(np.concatenate(unique_arrays))
+        # Exclude 0 (padding/missing value)
+        all_unique = all_unique[all_unique != 0]
+        print(f"\n  ** Total unique fielders (all positions): {format_number(len(all_unique))} **")
+    else:
+        print(f"\n  ** Total unique fielders (all positions): 0 **")
 
     # Categorical fields - aggregate distributions
     print(f"\nCategorical Fields:")
@@ -422,7 +475,7 @@ def main() -> None:
         print_split_summary(stats)
 
     # Print combined/detailed stats
-    print_combined_stats(all_stats, args.top_n)
+    print_combined_stats(all_stats, args.top_n, args)
 
     print(f"\n{'=' * 60}")
     print("  Done!")

@@ -57,7 +57,7 @@ def _add_status_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     parser.add_argument(
         "--no-compact",
-        action="store_false",
+        action="store_true",
         help="Do not compact the console output",
     )
     parser.set_defaults(func=handle_cache_status)

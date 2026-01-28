@@ -155,9 +155,9 @@ Predict the pitcher's next pitch.
 |-------|------|----------|-------------|
 | `pitcher_id` | integer | Yes | MLBAM pitcher ID |
 | `batter_id` | integer | Yes | MLBAM batter ID |
-| `algorithm` | string | No | `"similarity"` or `"deep"` |
+| `algorithm` | string | No | `"similarity"` or `"xlstm"` |
 | `sample_size` | integer | No | Number of pitches to sample |
-| `prev_pitches` | array | No | Optional prior pitch sequence |
+| `prev_pitches` | array | No | Required for xLSTM (empty list allowed) |
 | `count_balls` | integer | No | Ball count (0-3) |
 | `count_strikes` | integer | No | Strike count (0-2) |
 | `score_bat` | integer | No | Batting team's score |
@@ -165,6 +165,10 @@ Predict the pitcher's next pitch.
 | `game_date` | string | No | Date in "YYYY-MM-DD" format |
 
 Additional optional context fields include outs, bases state, inning, fielders, rest days, and strike zone bounds (see OpenAPI schema for the full request model).
+
+**xLSTM requirements:** When `algorithm="xlstm"`, `prev_pitches` must be provided and each item must include a `pa_id` (plate-appearance id). Use an empty list for cold-start.
+
+xLSTM is available only for pitcher predictions; batter and batted-ball endpoints use the similarity algorithm.
 
 **Response:**
 
@@ -292,7 +296,7 @@ Predict the batter's outcome for a given pitch.
 | `pitch_speed` | float | Yes | Pitch speed in mph |
 | `pitch_x` | float | Yes | Horizontal location (feet from center) |
 | `pitch_z` | float | Yes | Vertical location (feet from ground) |
-| `algorithm` | string | Yes | `"similarity"` or `"deep"` |
+| `algorithm` | string | Yes | `"similarity"` |
 
 **Response:**
 

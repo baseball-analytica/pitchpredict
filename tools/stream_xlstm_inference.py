@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Stream inference from an xLSTM checkpoint directly in the terminal.
 
-uv run stream_xlstm_inference --ckpt /raid/ckpts/pitch_xlstm/ckpt_step_0010000.pt \
+uv run python -m tools.stream_xlstm_inference \
+    --ckpt /raid/ckpts/pitch_xlstm/ckpt_step_0010000.pt \
     --data-dir /raid/kline/pitchpredict/.pitchpredict_data/test
 """
 
@@ -9,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 from collections import OrderedDict
-import importlib.util
 import math
 import random
 import sys
@@ -23,13 +23,15 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from pitchpredict.backend.algs.deep.dataset import (
+from pitchpredict.backend.algs.xlstm.model import BaseballxLSTM, init_gate_biases
+from tools.xlstm import Config
+from tools.deep.dataset import (
     PackedPitchContext,
     PackedPitchDataset,
     PackedPitchChunk,
     chunk_to_context,
 )
-from pitchpredict.backend.algs.deep.types import PitchToken
+from tools.deep.types import PitchToken
 
 
 def nll_to_bpb(nll: float) -> float:
@@ -63,48 +65,31 @@ def evaluate(
     return nll, bpb
 
 
-def _load_xlstm_module() -> object:
-    """Dynamically import `scripts/xlstm.py` so we can reuse its classes."""
-    xlstm_path = Path(__file__).resolve().parent / "xlstm.py"
-    if not xlstm_path.exists():
-        raise FileNotFoundError(f"xlstm.py not found at {xlstm_path}")
-
-    spec = importlib.util.spec_from_file_location(
-        "pitchpredict_scripts_xlstm", xlstm_path
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"unable to import xlstm module from {xlstm_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)  # type: ignore[attr-defined]
-    return module
-
-
 def _build_model(
-    xlstm_mod: object,
-    cfg_obj: object,
+    cfg: Config,
     state_dict: dict[str, torch.Tensor],
     device: torch.device,
 ) -> torch.nn.Module:
     """Instantiate BaseballxLSTM with the config pulled from the checkpoint."""
-    model = xlstm_mod.BaseballxLSTM(
-        vocab_size=cfg_obj.vocab_size,
-        d_model=cfg_obj.d_model,
-        num_heads=cfg_obj.num_heads,
-        num_blocks=cfg_obj.num_blocks,
-        dqk_factor=cfg_obj.dqk_factor,
-        dropout=cfg_obj.dropout,
-        denom_floor=cfg_obj.denom_floor,
-        gate_softcap=cfg_obj.gate_softcap,
-        detach_interval=cfg_obj.tbptt,
-        act_ckpt=bool(cfg_obj.act_ckpt),
-        tie_weights=bool(cfg_obj.tie_weights),
-        logits_softcap=cfg_obj.logits_softcap,
-        eod_id=cfg_obj.eod_id,
-        num_pitchers=cfg_obj.num_pitchers,
-        num_batters=cfg_obj.num_batters,
+    model = BaseballxLSTM(
+        vocab_size=cfg.vocab_size,
+        d_model=cfg.d_model,
+        num_heads=cfg.num_heads,
+        num_blocks=cfg.num_blocks,
+        dqk_factor=cfg.dqk_factor,
+        dropout=cfg.dropout,
+        denom_floor=cfg.denom_floor,
+        gate_softcap=cfg.gate_softcap,
+        detach_interval=cfg.tbptt,
+        act_ckpt=bool(cfg.act_ckpt),
+        tie_weights=bool(cfg.tie_weights),
+        logits_softcap=cfg.logits_softcap,
+        eod_id=cfg.eod_id,
+        num_pitchers=cfg.num_pitchers,
+        num_batters=cfg.num_batters,
+        num_fielders=cfg.num_fielders,
     )
-    xlstm_mod.init_gate_biases_v2(model)
+    init_gate_biases(model)
     state_dict = maybe_strip_compile_prefix(state_dict)
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
     if missing or unexpected:
@@ -216,7 +201,7 @@ def parse_args() -> argparse.Namespace:
         "--ckpt",
         required=True,
         type=str,
-        help="Path to checkpoint produced by scripts/xlstm.py",
+        help="Path to checkpoint produced by tools/xlstm.py",
     )
     parser.add_argument(
         "--data-dir",
@@ -288,8 +273,7 @@ def main() -> None:
     if "config" not in state or "model" not in state:
         raise KeyError("checkpoint missing 'config' or 'model' entries")
 
-    xlstm_mod = _load_xlstm_module()
-    cfg = xlstm_mod.Config(**state["config"])
+    cfg = Config(**state["config"])
 
     data_dir = Path(args.data_dir or cfg.data_dir).expanduser()
     context_prefix = args.context_prefix or cfg.context_prefix
@@ -301,7 +285,7 @@ def main() -> None:
     )
     dataset.set_offset(int(args.offset))
 
-    model = _build_model(xlstm_mod, cfg, state["model"], device)
+    model = _build_model(cfg, state["model"], device)
     if args.eval:
         sampler: DistributedSampler[torch.LongTensor] = DistributedSampler(
             dataset, num_replicas=1, rank=0, shuffle=False, drop_last=False

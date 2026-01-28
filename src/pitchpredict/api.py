@@ -8,7 +8,11 @@ from fastapi import HTTPException
 import pybaseball  # type: ignore
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
-from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
+from pitchpredict.backend.algs import (
+    get_algorithm_by_name,
+    get_available_algorithms,
+    resolve_algorithm_name,
+)
 from pitchpredict.backend.caching import PitchPredictCache
 from pitchpredict.backend.fetching import (
     get_player_id_from_name,
@@ -46,7 +50,8 @@ class PitchPredict:
         self.fuzzy_player_lookup = fuzzy_player_lookup
         if algorithms is None:
             algorithms = {
-                "similarity": SimilarityAlgorithm(),
+                name: get_algorithm_by_name(name)
+                for name in get_available_algorithms()
             }
         self.algorithms = algorithms
         self.__post_init__()
@@ -81,12 +86,12 @@ class PitchPredict:
                     alg.cache = self.cache
 
         # check algorithms
-        VALID_ALGORITHMS = ["similarity", "deep"]
-        if self.algorithms == []:
-            self.logger.error("algorithms is an empty list")
+        valid_algorithms = set(get_available_algorithms(include_aliases=True))
+        if not self.algorithms:
+            self.logger.error("algorithms is empty")
             raise ValueError("at least one algorithm must be specified")
         for algorithm in self.algorithms:
-            if algorithm not in VALID_ALGORITHMS:
+            if algorithm not in valid_algorithms:
                 self.logger.error(f"unrecognized algorithm: {algorithm}")
                 raise ValueError(f"unrecognized algorithm: {algorithm}")
 
@@ -235,13 +240,14 @@ class PitchPredict:
             strike_zone_bottom=strike_zone_bottom,
         )
 
-        alg = self.algorithms.get(request.algorithm)
+        resolved_name = resolve_algorithm_name(request.algorithm)
+        alg = self.algorithms.get(resolved_name) or self.algorithms.get(request.algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {request.algorithm}")
             raise HTTPException(
                 status_code=400, detail=f"unrecognized algorithm: {request.algorithm}"
             )
-        self.logger.debug(f"using algorithm: {request.algorithm}")
+        self.logger.debug(f"using algorithm: {resolved_name}")
 
         try:
             result = await alg.predict_pitcher(request=request)
@@ -274,13 +280,14 @@ class PitchPredict:
         """
         self.logger.debug("predict_batter called")
 
-        alg = self.algorithms.get(algorithm)
+        resolved_name = resolve_algorithm_name(algorithm)
+        alg = self.algorithms.get(resolved_name) or self.algorithms.get(algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {algorithm}")
             raise HTTPException(
                 status_code=400, detail=f"unrecognized algorithm: {algorithm}"
             )
-        self.logger.debug(f"using algorithm: {algorithm}")
+        self.logger.debug(f"using algorithm: {resolved_name}")
 
         try:
             result = await alg.predict_batter(
@@ -322,13 +329,14 @@ class PitchPredict:
         """
         self.logger.debug("predict_batted_ball called")
 
-        alg = self.algorithms.get(algorithm)
+        resolved_name = resolve_algorithm_name(algorithm)
+        alg = self.algorithms.get(resolved_name) or self.algorithms.get(algorithm)
         if alg is None:
             self.logger.error(f"unrecognized algorithm: {algorithm}")
             raise HTTPException(
                 status_code=400, detail=f"unrecognized algorithm: {algorithm}"
             )
-        self.logger.debug(f"using algorithm: {algorithm}")
+        self.logger.debug(f"using algorithm: {resolved_name}")
 
         try:
             result = await alg.predict_batted_ball(

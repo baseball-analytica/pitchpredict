@@ -171,7 +171,13 @@ cython_debug/
 .pitchpredict_data/
 .pitchpredict_logs/
 .pitchpredict_models/
+.pitchpredict_test/
 .scripts/
 
 # Claude
 .claude/
+
+# Wandb
+wandb/
+
+.uv-cache/

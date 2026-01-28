@@ -87,7 +87,7 @@ def _add_pitcher_parser(subparsers: argparse._SubParsersAction) -> None:
         "--algorithm",
         "-a",
         default="similarity",
-        help="Algorithm to use (default: similarity)",
+        help="Algorithm to use (default: similarity). xLSTM uses cold-start history.",
     )
     parser.add_argument(
         "--format",
@@ -301,6 +301,7 @@ def handle_predict_pitcher(args: argparse.Namespace) -> None:
         result = await api.predict_pitcher(
             pitcher_id=pitcher_id,
             batter_id=batter_id,
+            prev_pitches=[] if args.algorithm in {"xlstm", "deep"} else None,
             count_balls=args.balls,
             count_strikes=args.strikes,
             outs=args.outs,

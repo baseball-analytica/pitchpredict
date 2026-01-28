@@ -1,15 +1,15 @@
 # Algorithms
 
-PitchPredict supports two prediction algorithms: **similarity** and **deep learning**. This guide explains how each works and when to use them.
+PitchPredict supports two prediction algorithms: **similarity** and **xLSTM**. This guide explains how each works and when to use them.
 
 ## Algorithm Comparison
 
-| Feature | Similarity | Deep Learning |
+| Feature | Similarity | xLSTM |
 |---------|-----------|---------------|
 | **Approach** | Nearest-neighbor | Neural network (xLSTM) |
 | **Speed** | Faster | Slower |
-| **Data required** | Historical pitches | Pre-trained model |
-| **Availability** | Ready to use | Requires trained model |
+| **Data required** | Historical pitches | Pre-trained model weights |
+| **Availability** | Ready to use | Auto-downloads weights or use local checkpoint |
 | **Sequence awareness** | No | Yes |
 
 ## Specifying an Algorithm
@@ -18,7 +18,7 @@ PitchPredict supports two prediction algorithms: **similarity** and **deep learn
 # Python API
 result = await client.predict_pitcher(
     ...,
-    algorithm="similarity"  # or "deep"
+    algorithm="similarity"  # or "xlstm"
 )
 ```
 
@@ -149,22 +149,24 @@ client = PitchPredict(
 
 ---
 
-## Deep Learning Algorithm
+## xLSTM Algorithm
 
-The deep learning algorithm uses an xLSTM (Extended Long Short-Term Memory) neural network trained on pitch sequences.
+The xLSTM algorithm uses an extended LSTM architecture trained on pitch sequences.
 
 **Technical Writeup:** [Predicting MLB Pitch Sequences with xLSTM](https://panoramic-letter-5ff.notion.site/PitchPredict-Predicting-MLB-Pitch-Sequences-with-xLSTM-6eed91163e064299b726c3bd32eedb95)
 
 ### How It Works
 
-1. **Tokenize pitch sequences**: Convert pitch attributes into a 270-token vocabulary
+1. **Tokenize pitch sequences**: Convert pitch attributes into a compact token vocabulary
 2. **Encode context**: Process 28 contextual features (game state, players, etc.)
 3. **Generate predictions**: Use the trained model to predict the next token in the sequence
 4. **Decode output**: Convert predicted tokens back to pitch probabilities
 
+**Request requirements:** When using `algorithm="xlstm"`, you must supply `prev_pitches`. An empty list is valid for cold-start, and each pitch in the list must include a `pa_id` (plate appearance id).
+
 ### Token Vocabulary
 
-Pitches are encoded using 270 discrete tokens:
+Pitches are encoded using a vocabulary of ~260 discrete tokens:
 
 | Category | Tokens | Description |
 |----------|--------|-------------|
@@ -225,24 +227,31 @@ The model considers 28 contextual features:
 ### Model Architecture
 
 - **Model**: xLSTM (Extended LSTM with exponential gating)
-- **Embedding dimension**: 256
-- **Attention heads**: 8
-- **Transformer blocks**: 6
+- **Checkpoint-driven config**: Embedding size, head count, and block depth are loaded from the checkpoint config.
 - **Context adapter**: Embeds game state features
 
-### Training
+### Weights and Training
 
-Training the deep learning model requires:
+xLSTM inference uses a pre-trained checkpoint. By default, PitchPredict downloads weights on first use (uses `huggingface_hub`, `filelock`, `safetensors`). You can also point to a local checkpoint directory containing `model.safetensors` and `config.json` via `PITCHPREDICT_XLSTM_PATH`.
+
+Other optional environment overrides:
+
+- `PITCHPREDICT_XLSTM_REPO` (Hugging Face repo id)
+- `PITCHPREDICT_XLSTM_REVISION` (tag/commit)
+- `PITCHPREDICT_MODEL_DIR` (cache directory)
+- `PITCHPREDICT_DEVICE` (e.g. `cpu`, `cuda:0`)
+
+Training from scratch (optional) requires:
 
 1. Building a token dataset from Statcast data
 2. Training the xLSTM model
-3. Saving checkpoints to `.pitchpredict_models/`
+3. Exporting weights to `model.safetensors` with a matching `config.json`
 
-Scripts in the `scripts/` directory handle this:
+Tools in the `tools/` directory handle dataset generation and training:
 
 ```bash
-python scripts/build_deep_model.py
-python scripts/xlstm.py  # For distributed training
+uv run python -m tools.build_dataset_fast
+uv run torchrun --standalone --nproc_per_node=6 tools/xlstm.py  # For distributed training
 ```
 
 ### Pros and Cons
@@ -254,7 +263,7 @@ python scripts/xlstm.py  # For distributed training
 - Learns pitcher/batter tendencies
 
 **Cons:**
-- Requires trained model
+- Requires model weights
 - Slower inference
 - More computational resources
 - Training requires significant data
@@ -267,8 +276,8 @@ python scripts/xlstm.py  # For distributed training
 |----------|-------------|
 | Quick predictions | similarity |
 | Production API with low latency | similarity |
-| Analyzing pitch sequences | deep |
-| Research / analysis | deep |
-| No trained model available | similarity |
+| Analyzing pitch sequences | xlstm |
+| Research / analysis | xlstm |
+| No xLSTM weights available | similarity |
 
-The similarity algorithm is the default and works out of the box. The deep learning algorithm requires a trained model file.
+The similarity algorithm is the default and works out of the box. The xLSTM algorithm uses a pre-trained checkpoint (auto-download or local).

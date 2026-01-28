@@ -8,6 +8,8 @@ from pydantic import BaseModel
 class Pitch(BaseModel):
     """
     An individual pitch that can be included in a larger sequence.
+
+    For xLSTM/deep algorithm, pa_id is required to group pitches into plate appearances.
     """
 
     pitch_type: str
@@ -26,6 +28,21 @@ class Pitch(BaseModel):
     plate_pos_x: float
     plate_pos_z: float
     result: str
+    # Required for xLSTM/deep history grouping
+    pa_id: int | None = None
+    # Optional: per-pitch context overrides for xLSTM
+    batter_id: int | None = None
+    batter_age: int | None = None
+    batter_hits: Literal["L", "R"] | None = None
+    count_balls: int | None = None
+    count_strikes: int | None = None
+    outs: int | None = None
+    bases_state: int | None = None
+    score_bat: int | None = None
+    score_fld: int | None = None
+    inning: int | None = None
+    pitch_number: int | None = None
+    number_through_order: int | None = None
 
 
 class PredictPitcherRequest(BaseModel):

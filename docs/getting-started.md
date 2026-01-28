@@ -52,6 +52,22 @@ asyncio.run(main())
 Pitcher and batter IDs are MLBAM IDs; use `PitchPredict.get_player_id_from_name` as shown above to resolve names.
 Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
+### xLSTM Quick Start
+
+xLSTM requires `prev_pitches` (empty list allowed for cold-start):
+
+```python
+result = await client.predict_pitcher(
+    pitcher_id=await client.get_player_id_from_name("Clayton Kershaw"),
+    batter_id=await client.get_player_id_from_name("Aaron Judge"),
+    prev_pitches=[],  # required for xLSTM
+    game_date="2024-06-15",
+    algorithm="xlstm",
+)
+```
+
+When providing history, each pitch in `prev_pitches` must include a `pa_id` (plate-appearance id).
+
 ## Quick Start: CLI
 
 Run predictions and player lookups without starting the server:
@@ -166,4 +182,4 @@ Common pitch type codes in the response:
 
 - [Python API Reference](python-api.md) - Full API documentation
 - [REST API Reference](rest-api.md) - Server endpoint details
-- [Algorithms](algorithms.md) - Learn about similarity vs deep learning
+- [Algorithms](algorithms.md) - Learn about similarity vs xLSTM

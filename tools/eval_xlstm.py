@@ -5,12 +5,12 @@ Evaluation script for xlstm checkpoints.
 Evaluates one or more trained checkpoints on the test set and reports test loss metrics.
 
 Usage:
-    python scripts/eval_xlstm.py \
+    python tools/eval_xlstm.py \
         --ckpt_pattern "/raid/ckpts/pitch_xlstm/*.pt" \
         --output_json eval_results.json
 
     Or set CHECKPOINT_LIST below and run without --ckpt_pattern:
-    python scripts/eval_xlstm.py --output_json eval_results.json
+    python tools/eval_xlstm.py --output_json eval_results.json
 """
 
 # =============================================================================
@@ -18,36 +18,30 @@ Usage:
 # If non-empty, this takes priority over --ckpt_pattern
 # =============================================================================
 CHECKPOINT_LIST: list[str] = [
-    # # snowy sponge
-    # "/raid/ckpts/pitch_xlstm_512seq/ckpt_step_0002000.pt",
-    # # scarlet snowflake
-    # "/raid/ckpts/pitch_xlstm_small/ckpt_step_0002000.pt",
-    # swift dew
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq/ckpt_step_0010000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq/ckpt_step_0015000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq/ckpt_step_0019500.pt",
-    # faithful sound
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0008000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0011000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0013000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0017000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny/ckpt_step_0020000.pt",
-    # fragrant blaze
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0015000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0020000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0022000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0027000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_smallseq_batch64/ckpt_step_0029000.pt",
-    # leafy wood
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0018000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0022000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0025000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0028000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0031000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0040000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0050000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0060000.pt",
-    "/raid/ckpts/pitch_xlstm_tiny_tinyseq/ckpt_step_0100000.pt",
+
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0058000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0059000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0060000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0061000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0062000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0063000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0064000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0065000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0066000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0067000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0068000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0069000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0070000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0071000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0072000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0073000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0074000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0075000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0076000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0077000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0078000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0079000.pt",
+    "/raid/ckpts/pitch_xlstm_sessions/ckpt_step_0080000.pt",
 ]
 # =============================================================================
 
@@ -62,21 +56,20 @@ from dataclasses import asdict
 from datetime import datetime
 
 import numpy as np
+from tqdm import tqdm
+import wandb
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from pitchpredict.backend.algs.deep.dataset import (
+from tools.deep.dataset import (
     PackedPitchDataset,
     chunk_to_context,
 )
 
 # Import model components from xlstm.py
-from pitchpredict.backend.xlstm import (
-    BaseballxLSTM,
-    Config,
-    set_seed,
-)
+from pitchpredict.backend.algs.xlstm.model import BaseballxLSTM
+from tools.xlstm import Config, set_seed, setup_wandb
 
 
 def nll_to_bpb(nll: float) -> float:
@@ -102,8 +95,9 @@ def build_model(cfg: Config, device: torch.device) -> BaseballxLSTM:
         eod_id=cfg.eod_id,
         num_pitchers=cfg.num_pitchers,
         num_batters=cfg.num_batters,
+        num_fielders=cfg.num_fielders,
     )
-    # Note: No init_gate_biases_v2() - biases will be loaded from checkpoint
+    # Biases will be loaded from checkpoint.
     torch.cuda.set_device(device)
     model.to(device)
     return model
@@ -122,7 +116,7 @@ def evaluate(
     autocast_dtype = torch.bfloat16 if amp_dtype == "bf16" else torch.float16
 
     with torch.no_grad():
-        for chunk in loader:
+        for chunk in tqdm(loader, desc="Evaluating", leave=False):
             x = chunk.x.to(device, non_blocking=True)
             y = chunk.y.to(device, non_blocking=True)
             x_ctx = chunk_to_context(chunk, device)
@@ -130,11 +124,11 @@ def evaluate(
             with torch.amp.autocast("cuda", dtype=autocast_dtype):
                 logits = model(x, x_ctx)
                 loss = F.cross_entropy(
-                    logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum"
+                    logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum", ignore_index=0
                 )
 
             total_nll += loss.item()
-            total_tokens += y.numel()
+            total_tokens += (y != 0).sum().item()  # Only count non-PAD tokens
 
     nll = total_nll / max(1, total_tokens)
     bpb = nll_to_bpb(nll)
@@ -246,7 +240,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output_json",
         type=str,
-        default="eval_results.json",
+        default="new_eval_results.json",
         help="Path to save JSON results (default: eval_results.json)",
     )
     parser.add_argument(
@@ -260,6 +254,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=42,
         help="Random seed for reproducibility (default: 42)",
+    )
+    parser.add_argument(
+        "--run_id",
+        type=str,
+        default=None,
+        help="Wandb run ID to resume.",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=128,
+        help="Batch size for evaluation (default: 128)",
     )
 
     return parser.parse_args()
@@ -276,6 +282,11 @@ def main() -> None:
     if not torch.cuda.is_available():
         print("Warning: CUDA not available, falling back to CPU")
         device = torch.device("cpu")
+
+    if args.run_id is not None:
+        setup_wandb(cfg=Config(), run_id=args.run_id)
+        wandb.define_metric("eval_step")
+        wandb.define_metric("final_test_loss", step_metric="eval_step")
 
     # Find all checkpoints (CHECKPOINT_LIST takes priority over glob)
     if CHECKPOINT_LIST:
@@ -335,12 +346,9 @@ def main() -> None:
             )
             print(f"  Batch size: {cfg.micro_batch_size}, Seq len: {cfg.seq_len}")
 
-            # Build model
-            cfg.num_pitchers = 2962
-            cfg.num_batters = 3701
             model = build_model(cfg, device)
-            model.load_state_dict(state["model"], strict=False)
-            # model = torch.compile(model, mode="default")
+            model.load_state_dict(state["model"], strict=True)
+            model = torch.compile(model, mode="default")
 
             # Load test dataset
             test_ds = PackedPitchDataset(
@@ -352,7 +360,7 @@ def main() -> None:
 
             test_loader = DataLoader(
                 test_ds,
-                batch_size=cfg.micro_batch_size,
+                batch_size=args.batch_size,
                 shuffle=False,
                 num_workers=4,
                 pin_memory=True,
@@ -377,6 +385,10 @@ def main() -> None:
                     "config": asdict(cfg),
                 }
             )
+
+            # Log to wandb
+            if args.run_id is not None:
+                wandb.log({"eval_step": step, "final_test_loss": nll})
 
             # Free memory
             del model

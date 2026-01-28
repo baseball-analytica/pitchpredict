@@ -8,10 +8,12 @@ from pydantic import BaseModel
 import torch
 
 
+
 class PitchToken(Enum):
-    SESSION_START = auto()  # when a pitcher enters a game
-    SESSION_END = auto()  # when the pitcher leaves the game
-    PA_START = auto()  # start of a plate appearance
+    PAD = 0  # padding token for sequences shorter than seq_len
+    SESSION_START = auto() # when a pitcher enters a game
+    SESSION_END = auto() # when the pitcher leaves the game
+    PA_START = auto() # start of a plate appearance
     PA_END = auto()
     IS_CH = auto()
     IS_CU = auto()
@@ -273,7 +275,7 @@ class TokenCategory(Enum):
     """
     Categories for grouping PitchToken values by their semantic role.
     """
-
+    PAD = auto()
     SESSION_START = auto()
     SESSION_END = auto()
     PA_START = auto()
@@ -298,58 +300,27 @@ class TokenCategory(Enum):
 
 # Token range boundaries (inclusive) for category classification
 _TOKEN_RANGES: list[tuple[PitchToken, PitchToken, TokenCategory]] = [
+    (PitchToken.PAD, PitchToken.PAD, TokenCategory.PAD),
     (PitchToken.SESSION_START, PitchToken.SESSION_START, TokenCategory.SESSION_START),
     (PitchToken.SESSION_END, PitchToken.SESSION_END, TokenCategory.SESSION_END),
     (PitchToken.PA_START, PitchToken.PA_START, TokenCategory.PA_START),
     (PitchToken.PA_END, PitchToken.PA_END, TokenCategory.PA_END),
     (PitchToken.IS_CH, PitchToken.IS_AB, TokenCategory.PITCH_TYPE),
     (PitchToken.SPEED_IS_LT65, PitchToken.SPEED_IS_GT105, TokenCategory.SPEED),
-    (
-        PitchToken.SPIN_RATE_IS_LT750,
-        PitchToken.SPIN_RATE_IS_GT3250,
-        TokenCategory.SPIN_RATE,
-    ),
-    (
-        PitchToken.SPIN_AXIS_IS_0_30,
-        PitchToken.SPIN_AXIS_IS_330_360,
-        TokenCategory.SPIN_AXIS,
-    ),
-    (
-        PitchToken.RELEASE_POS_X_IS_LTN4,
-        PitchToken.RELEASE_POS_X_IS_GT4,
-        TokenCategory.RELEASE_POS_X,
-    ),
-    (
-        PitchToken.RELEASE_POS_Z_IS_LT4,
-        PitchToken.RELEASE_POS_Z_IS_GT7,
-        TokenCategory.RELEASE_POS_Z,
-    ),
-    (
-        PitchToken.RELEASE_EXTENSION_IS_LT5,
-        PitchToken.RELEASE_EXTENSION_IS_GT75,
-        TokenCategory.RELEASE_EXTENSION,
-    ),
+    (PitchToken.SPIN_RATE_IS_LT750, PitchToken.SPIN_RATE_IS_GT3250, TokenCategory.SPIN_RATE),
+    (PitchToken.SPIN_AXIS_IS_0_30, PitchToken.SPIN_AXIS_IS_330_360, TokenCategory.SPIN_AXIS),
+    (PitchToken.RELEASE_POS_X_IS_LTN4, PitchToken.RELEASE_POS_X_IS_GT4, TokenCategory.RELEASE_POS_X),
+    (PitchToken.RELEASE_POS_Z_IS_LT4, PitchToken.RELEASE_POS_Z_IS_GT7, TokenCategory.RELEASE_POS_Z),
+    (PitchToken.RELEASE_EXTENSION_IS_LT5, PitchToken.RELEASE_EXTENSION_IS_GT75, TokenCategory.RELEASE_EXTENSION),
     (PitchToken.VX0_IS_LTN15, PitchToken.VX0_IS_GT15, TokenCategory.VX0),
     (PitchToken.VY0_IS_LTN150, PitchToken.VY0_IS_GTN100, TokenCategory.VY0),
     (PitchToken.VZ0_IS_LTN10, PitchToken.VZ0_IS_GT15, TokenCategory.VZ0),
     (PitchToken.AX_IS_LTN25, PitchToken.AX_IS_GT25, TokenCategory.AX),
     (PitchToken.AY_IS_LT15, PitchToken.AY_IS_GT40, TokenCategory.AY),
     (PitchToken.AZ_IS_LTN45, PitchToken.AZ_IS_GTN15, TokenCategory.AZ),
-    (
-        PitchToken.PLATE_POS_X_IS_LTN2,
-        PitchToken.PLATE_POS_X_IS_GT2,
-        TokenCategory.PLATE_POS_X,
-    ),
-    (
-        PitchToken.PLATE_POS_Z_IS_LTN1,
-        PitchToken.PLATE_POS_Z_IS_GT5,
-        TokenCategory.PLATE_POS_Z,
-    ),
-    (
-        PitchToken.RESULT_IS_BALL,
-        PitchToken.RESULT_IS_AUTOMATIC_STRIKE,
-        TokenCategory.RESULT,
-    ),
+    (PitchToken.PLATE_POS_X_IS_LTN2, PitchToken.PLATE_POS_X_IS_GT2, TokenCategory.PLATE_POS_X),
+    (PitchToken.PLATE_POS_Z_IS_LTN1, PitchToken.PLATE_POS_Z_IS_GT5, TokenCategory.PLATE_POS_Z),
+    (PitchToken.RESULT_IS_BALL, PitchToken.RESULT_IS_AUTOMATIC_STRIKE, TokenCategory.RESULT),
 ]
 
 
@@ -389,6 +360,7 @@ def get_tokens_in_category(category: TokenCategory) -> list[PitchToken]:
 
 # Grammar: maps each category to valid next token categories
 _NEXT_CATEGORY: dict[TokenCategory, list[TokenCategory]] = {
+    TokenCategory.PAD: [],  # PAD is not part of the grammar, no valid next tokens
     TokenCategory.SESSION_START: [TokenCategory.PA_START, TokenCategory.SESSION_END],
     TokenCategory.PA_START: [TokenCategory.PITCH_TYPE],
     TokenCategory.PITCH_TYPE: [TokenCategory.SPEED],
@@ -455,9 +427,7 @@ class PitchContext(BaseModel):
     pitcher_age: int
     pitcher_throws: Literal["L", "R"]
     batter_age: int
-    batter_hits: Literal[
-        "L", "R"
-    ]  # if the batter is a switch hitter, they will still be on just one side of the plate
+    batter_hits: Literal["L", "R"] # if the batter is a switch hitter, they will still be on just one side of the plate
     count_balls: int
     count_strikes: int
     outs: int
@@ -489,37 +459,35 @@ class PitchContext(BaseModel):
         batter_is_lefty = 1 if self.batter_hits == "L" else -1
         game_year = int(self.game_date.split("-")[0])
 
-        tensor = torch.tensor(
-            [
-                self.pitcher_id,
-                self.batter_id,
-                self.pitcher_age,
-                pitcher_is_lefty,
-                self.batter_age,
-                batter_is_lefty,
-                self.count_balls,
-                self.count_strikes,
-                self.outs,
-                self.bases_state,
-                self.score_bat,
-                self.score_fld,
-                self.inning,
-                self.pitch_number,
-                self.number_through_order,
-                game_year,
-                self.fielder_2_id,
-                self.fielder_3_id,
-                self.fielder_4_id,
-                self.fielder_5_id,
-                self.fielder_6_id,
-                self.fielder_7_id,
-                self.fielder_8_id,
-                self.fielder_9_id,
-                self.batter_days_since_prev_game,
-                self.pitcher_days_since_prev_game,
-                self.strike_zone_top,
-                self.strike_zone_bottom,
-            ]
-        )
+        tensor = torch.tensor([
+            self.pitcher_id,
+            self.batter_id,
+            self.pitcher_age,
+            pitcher_is_lefty,
+            self.batter_age,
+            batter_is_lefty,
+            self.count_balls,
+            self.count_strikes,
+            self.outs,
+            self.bases_state,
+            self.score_bat,
+            self.score_fld,
+            self.inning,
+            self.pitch_number,
+            self.number_through_order,
+            game_year,
+            self.fielder_2_id,
+            self.fielder_3_id,
+            self.fielder_4_id,
+            self.fielder_5_id,
+            self.fielder_6_id,
+            self.fielder_7_id,
+            self.fielder_8_id,
+            self.fielder_9_id,
+            self.batter_days_since_prev_game,
+            self.pitcher_days_since_prev_game,
+            self.strike_zone_top,
+            self.strike_zone_bottom,
+        ])
 
         return tensor
