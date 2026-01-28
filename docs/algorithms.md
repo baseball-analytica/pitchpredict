@@ -39,31 +39,60 @@ The similarity algorithm uses weighted nearest-neighbor analysis to find histori
 
 1. **Fetch historical data**: Retrieve all pitches thrown by the pitcher (or to the batter) from Statcast
 2. **Calculate similarity scores**: Score each pitch based on how closely it matches the current context
-3. **Sample top pitches**: Select the top 5% most similar pitches
+3. **Sample top pitches**: Select the top N% most similar pitches (default 5%; pitcher/batted-ball enforce a 100-sample minimum)
 4. **Aggregate statistics**: Compute probabilities and distributions from the sample
 
 ### Pitcher Prediction Weights
 
-For `predict_pitcher`, similarity is calculated using:
+For `predict_pitcher`, similarity is a weighted sum over per-field scores. Weights come from
+`SimilarityWeights` and are **softmax-normalized** (so they sum to 1). If a field is missing in the
+request or not present in the pitch dataset, its contribution is skipped (weights are **not**
+renormalized in that case).
 
-| Factor | Weight | Description |
-|--------|--------|-------------|
-| Batter | 35% | Same batter = 1.0, different = 0.0 |
-| Balls | 20% | Same ball count = 1.0, different = 0.0 |
-| Strikes | 20% | Same strike count = 1.0, different = 0.0 |
-| Batting team score | 10% | Same score = 1.0, different = 0.0 |
-| Fielding team score | 10% | Same score = 1.0, different = 0.0 |
-| Game date | 5% | Same date = 1.0, different = 0.0 |
+**Scoring rules:**
+- **Exact match fields**: score is `1.0` for an exact match, `0.0` otherwise
+- **Numeric fields**: `max(0, 1 - abs(diff) / tolerance)` where tolerance is the column std-dev
+- **Fixed tolerances**: `strike_zone_top` uses `0.2`, `strike_zone_bottom` uses `0.1`
+- **Bases state**: `1 - (mismatches / 3)` across 1B/2B/3B occupancy
+- **Game date**: `max(0, 1 - abs(days_diff) / 365.0)` (recency)
+
+**Current weight definitions (pre-softmax):**
+
+| Factor | Raw weight | Score type |
+|--------|------------|------------|
+| `batter_id` | 1.0 | Exact match |
+| `pitcher_age` | 0.6 | Numeric (std tolerance) |
+| `pitcher_throws` | 0.4 | Exact match |
+| `batter_age` | 0.4 | Numeric (std tolerance) |
+| `batter_hits` | 0.4 | Exact match |
+| `count_balls` | 0.5 | Exact match |
+| `count_strikes` | 0.5 | Exact match |
+| `outs` | 0.2 | Exact match |
+| `bases_state` | 0.3 | Bases mismatch score |
+| `score_bat` | 0.1 | Numeric (std tolerance) |
+| `score_fld` | 0.1 | Numeric (std tolerance) |
+| `inning` | 0.1 | Exact match |
+| `pitch_number` | 0.1 | Numeric (std tolerance) |
+| `number_through_order` | 0.2 | Exact match |
+| `game_date` | 0.05 | Recency score |
+| `fielder_2_id` | 0.3 | Exact match |
+| `fielder_3_id` | 0.05 | Exact match |
+| `fielder_4_id` | 0.05 | Exact match |
+| `fielder_5_id` | 0.05 | Exact match |
+| `fielder_6_id` | 0.05 | Exact match |
+| `fielder_7_id` | 0.05 | Exact match |
+| `fielder_8_id` | 0.05 | Exact match |
+| `fielder_9_id` | 0.05 | Exact match |
+| `batter_days_since_prev_game` | 0.05 | Numeric (std tolerance) |
+| `pitcher_days_since_prev_game` | 0.05 | Numeric (std tolerance) |
+| `strike_zone_top` | 0.1 | Numeric (tolerance 0.2) |
+| `strike_zone_bottom` | 0.1 | Numeric (tolerance 0.1) |
 
 **Similarity formula:**
 
 ```
-similarity = 0.35 * batter_match +
-             0.20 * balls_match +
-             0.20 * strikes_match +
-             0.10 * score_bat_match +
-             0.10 * score_fld_match +
-             0.05 * date_match
+weights = softmax(raw_weights)
+similarity = sum_i(weights[i] * score_i)
 ```
 
 ### Batter Prediction Weights
@@ -83,6 +112,8 @@ For `predict_batter`, additional pitch characteristics are considered:
 | Pitch horizontal location | 5% |
 | Pitch vertical location | 5% |
 
+All `predict_batter` similarity scores are **exact matches** on the provided values (no tolerances).
+
 ### Batted Ball Prediction Weights
 
 For `predict_batted_ball`, the algorithm uses **continuous similarity scores** (unlike the binary matching above):
@@ -92,7 +123,7 @@ For `predict_batted_ball`, the algorithm uses **continuous similarity scores** (
 | Exit velocity | 45% | `max(0, 1 - abs(diff) / 15.0)` — 15 mph tolerance |
 | Launch angle | 40% | `max(0, 1 - abs(diff) / 20.0)` — 20° tolerance |
 | Spray angle | 5% | `max(0, 1 - abs(diff) / 30.0)` — if provided |
-| Bases state | 5% | 1.0 if exact match, 0.5 if both have runners, else 0.0 |
+| Bases state | 5% | `1 - (mismatches / 3)` across 1B/2B/3B occupancy |
 | Outs | 3% | Same outs = 1.0, different = 0.0 |
 | Date | 2% | `max(0, 1 - abs(days_diff) / 365.0)` — recency bonus |
 
@@ -122,7 +153,13 @@ When game context is provided, impossible outcomes are filtered:
 
 ### Sample Percentage
 
-By default, the algorithm samples the top 5% most similar pitches (minimum 100 for batted balls). This can be configured:
+By default, the algorithm samples the top 5% most similar items:
+
+- **Pitcher** predictions enforce a minimum of 100 pitches.
+- **Batted ball** predictions enforce a minimum of 100 batted balls.
+- **Batter** predictions use the raw top-N% with no minimum floor.
+
+This can be configured:
 
 ```python
 from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
