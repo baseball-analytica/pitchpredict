@@ -16,6 +16,7 @@ PitchPredict is cutting-edge MLB pitch prediction software that predicts pitcher
 - [REST API Reference](rest-api.md) - FastAPI server endpoints
 - [CLI Reference](cli.md) - Command-line interface
 - [Algorithms](algorithms.md) - Similarity and xLSTM algorithms
+- [Similarity Deep Dive](similarity/index.md) - Detailed similarity algorithm documentation
 - [Caching](caching.md) - Cache behavior and storage layout
 
 ## Features

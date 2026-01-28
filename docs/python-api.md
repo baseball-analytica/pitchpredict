@@ -59,6 +59,144 @@ client = PitchPredict(
 
 ## Methods
 
+### get_player_id_from_name
+
+Resolve a player's MLBAM ID from their name.
+
+```python
+async def get_player_id_from_name(
+    player_name: str,
+    fuzzy_lookup: bool | None = None,
+) -> int
+```
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `player_name` | `str` | Required | Player name in "First Last" format |
+| `fuzzy_lookup` | `bool \| None` | `None` | Override fuzzy matching setting (uses client default if `None`) |
+
+#### Returns
+
+The player's MLBAM ID as an integer.
+
+#### Example
+
+```python
+import asyncio
+from pitchpredict import PitchPredict
+
+async def main():
+    client = PitchPredict()
+
+    # Get player ID by name
+    judge_id = await client.get_player_id_from_name("Aaron Judge")
+    print(f"Aaron Judge's MLBAM ID: {judge_id}")
+    # 592450
+
+    # With explicit fuzzy matching
+    kershaw_id = await client.get_player_id_from_name("Kershaw", fuzzy_lookup=True)
+    print(f"Clayton Kershaw's MLBAM ID: {kershaw_id}")
+
+asyncio.run(main())
+```
+
+---
+
+### get_player_records_from_name
+
+Resolve player records from a name, returning up to `limit` candidates.
+
+```python
+async def get_player_records_from_name(
+    player_name: str,
+    fuzzy_lookup: bool | None = None,
+    limit: int = 1,
+) -> list[dict[str, Any]]
+```
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `player_name` | `str` | Required | Player name to search for |
+| `fuzzy_lookup` | `bool \| None` | `None` | Override fuzzy matching setting |
+| `limit` | `int` | `1` | Maximum number of results to return |
+
+#### Returns
+
+A list of player record dictionaries, each containing fields from `pybaseball.playerid_lookup`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name_first` | `str` | First name |
+| `name_last` | `str` | Last name |
+| `name_full` | `str` | Full name |
+| `key_mlbam` | `int` | MLBAM ID |
+| `mlb_played_first` | `int` | First MLB season |
+| `mlb_played_last` | `int` | Last MLB season |
+
+Additional fields from pybaseball may be included (e.g., `key_retro`, `key_bbref`, `key_fangraphs`).
+
+#### Example
+
+```python
+import asyncio
+from pitchpredict import PitchPredict
+
+async def main():
+    client = PitchPredict()
+
+    # Search with multiple results
+    results = await client.get_player_records_from_name("Smith", limit=5)
+    for player in results:
+        print(f"{player['name_full']}: {player['key_mlbam']}")
+
+asyncio.run(main())
+```
+
+---
+
+### get_player_record_from_id
+
+Resolve a player record from an MLBAM ID.
+
+```python
+async def get_player_record_from_id(
+    mlbam_id: int,
+) -> dict[str, Any]
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `mlbam_id` | `int` | The player's MLBAM ID |
+
+#### Returns
+
+A player record dictionary with the same fields as `get_player_records_from_name`.
+
+#### Example
+
+```python
+import asyncio
+from pitchpredict import PitchPredict
+
+async def main():
+    client = PitchPredict()
+
+    # Look up player by ID
+    record = await client.get_player_record_from_id(592450)
+    print(f"Name: {record['name_full']}")
+    print(f"Career: {record['mlb_played_first']}-{record['mlb_played_last']}")
+
+asyncio.run(main())
+```
+
+---
+
 ### predict_pitcher
 
 Predict the pitcher's next pitch given the game context.
@@ -133,15 +271,18 @@ The return value is a `PredictPitcherResponse` model; use attribute access or `m
 
 ```python
 import asyncio
-from pybaseball import playerid_lookup
 from pitchpredict import PitchPredict
 
 async def main():
     client = PitchPredict()
 
+    # Resolve player IDs from names
+    kershaw_id = await client.get_player_id_from_name("Clayton Kershaw")
+    judge_id = await client.get_player_id_from_name("Aaron Judge")
+
     result = await client.predict_pitcher(
-        pitcher_id=int(playerid_lookup("Kershaw", "Clayton").iloc[0]["key_mlbam"]),
-        batter_id=int(playerid_lookup("Judge", "Aaron").iloc[0]["key_mlbam"]),
+        pitcher_id=kershaw_id,
+        batter_id=judge_id,
         count_balls=1,
         count_strikes=2,
         score_bat=2,
