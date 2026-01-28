@@ -336,24 +336,26 @@ def handle_predict_batter(args: argparse.Namespace) -> None:
     from fastapi import HTTPException
 
     from pitchpredict.cli.output import format_batter_prediction
-    from pitchpredict.cli.utils import get_api, run_async
+    from pitchpredict.cli.utils import get_api, resolve_player, run_async
 
     api = get_api()
     game_date = args.date or date.today().isoformat()
 
     async def _run():
+        batter_id = await resolve_player(args.batter, api)
+        pitcher_id = await resolve_player(args.pitcher, api)
         result = await api.predict_batter(
-            batter_name=args.batter,
-            pitcher_name=args.pitcher,
-            balls=args.balls,
-            strikes=args.strikes,
-            score_bat=args.score_bat,
-            score_fld=args.score_fld,
-            game_date=game_date,
+            pitcher_id=pitcher_id,
+            batter_id=batter_id,
             pitch_type=args.type,
             pitch_speed=args.speed,
             pitch_x=args.release_x,
             pitch_z=args.release_z,
+            count_balls=args.balls,
+            count_strikes=args.strikes,
+            score_bat=args.score_bat,
+            score_fld=args.score_fld,
+            game_date=game_date,
             algorithm=args.algorithm,
         )
         return result

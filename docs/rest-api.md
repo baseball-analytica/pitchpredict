@@ -268,35 +268,35 @@ Predict the batter's outcome for a given pitch.
 
 ```json
 {
-  "batter_name": "Aaron Judge",
-  "pitcher_name": "Clayton Kershaw",
-  "balls": 1,
-  "strikes": 2,
-  "score_bat": 0,
-  "score_fld": 1,
-  "game_date": "2024-06-15",
+  "pitcher_id": 477132,
+  "batter_id": 592450,
   "pitch_type": "FF",
   "pitch_speed": 95.0,
   "pitch_x": 0.5,
   "pitch_z": 2.5,
+  "count_balls": 1,
+  "count_strikes": 2,
+  "score_bat": 0,
+  "score_fld": 1,
+  "game_date": "2024-06-15",
   "algorithm": "similarity"
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `batter_name` | string | Yes | Batter's name |
-| `pitcher_name` | string | Yes | Pitcher's name |
-| `balls` | integer | Yes | Ball count (0-3) |
-| `strikes` | integer | Yes | Strike count (0-2) |
-| `score_bat` | integer | Yes | Batting team's score |
-| `score_fld` | integer | Yes | Fielding team's score |
-| `game_date` | string | Yes | Date in "YYYY-MM-DD" format |
+| `pitcher_id` | integer | Yes | MLBAM pitcher ID |
+| `batter_id` | integer | Yes | MLBAM batter ID |
 | `pitch_type` | string | Yes | Pitch type code (e.g., "FF") |
 | `pitch_speed` | float | Yes | Pitch speed in mph |
 | `pitch_x` | float | Yes | Horizontal location (feet from center) |
 | `pitch_z` | float | Yes | Vertical location (feet from ground) |
+| `prev_pitches` | array | No | Reserved for xLSTM (not used for batter predictions yet) |
 | `algorithm` | string | Yes | `"similarity"` |
+| `sample_size` | integer | No | Number of pitches to sample |
+| `game_date` | string | No | Date in "YYYY-MM-DD" format |
+
+Additional optional context fields match `/predict/pitcher` (count, bases, score, inning, fielders, rest days, strike zone bounds).
 
 **Response:**
 
@@ -334,17 +334,17 @@ Predict the batter's outcome for a given pitch.
 curl -X POST http://localhost:8056/predict/batter \
   -H "Content-Type: application/json" \
   -d '{
-    "batter_name": "Aaron Judge",
-    "pitcher_name": "Clayton Kershaw",
-    "balls": 1,
-    "strikes": 2,
-    "score_bat": 0,
-    "score_fld": 1,
-    "game_date": "2024-06-15",
+    "pitcher_id": 477132,
+    "batter_id": 592450,
     "pitch_type": "FF",
     "pitch_speed": 95.0,
     "pitch_x": 0.5,
     "pitch_z": 2.5,
+    "count_balls": 1,
+    "count_strikes": 2,
+    "score_bat": 0,
+    "score_fld": 1,
+    "game_date": "2024-06-15",
     "algorithm": "similarity"
   }'
 ```

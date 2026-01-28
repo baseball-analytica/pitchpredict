@@ -126,8 +126,8 @@ pitchpredict predict batter <batter> <pitcher> <type> <speed> <release_x> <relea
 
 **Arguments**
 
-- `batter`: Batter name (full name required for similarity-based lookup)
-- `pitcher`: Pitcher name (full name required for similarity-based lookup)
+- `batter`: Batter name or MLBAM ID
+- `pitcher`: Pitcher name or MLBAM ID
 - `type`: Pitch type (e.g., `FF`, `SL`, `CU`)
 - `speed`: Pitch speed in mph
 - `release_x`: Pitch horizontal location

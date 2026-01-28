@@ -262,49 +262,105 @@ class PitchPredict:
 
     async def predict_batter(
         self,
-        batter_name: str,
-        pitcher_name: str,
-        balls: int,
-        strikes: int,
-        score_bat: int,
-        score_fld: int,
-        game_date: str,
+        pitcher_id: int,
+        batter_id: int,
         pitch_type: str,
         pitch_speed: float,
         pitch_x: float,
         pitch_z: float,
-        algorithm: str,
-    ) -> dict[str, Any]:
+        prev_pitches: list[api_types.Pitch] | None = None,
+        algorithm: str = "similarity",
+        sample_size: int = 1,
+        pitcher_age: int | None = None,
+        pitcher_throws: Literal["L", "R"] | None = None,
+        batter_age: int | None = None,
+        batter_hits: Literal["L", "R"] | None = None,
+        count_balls: int | None = None,
+        count_strikes: int | None = None,
+        outs: int | None = None,
+        bases_state: int | None = None,
+        score_bat: int | None = None,
+        score_fld: int | None = None,
+        inning: int | None = None,
+        pitch_number: int | None = None,
+        number_through_order: int | None = None,
+        game_date: str | None = None,
+        fielder_2_id: int | None = None,
+        fielder_3_id: int | None = None,
+        fielder_4_id: int | None = None,
+        fielder_5_id: int | None = None,
+        fielder_6_id: int | None = None,
+        fielder_7_id: int | None = None,
+        fielder_8_id: int | None = None,
+        fielder_9_id: int | None = None,
+        batter_days_since_prev_game: int | None = None,
+        pitcher_days_since_prev_game: int | None = None,
+        strike_zone_top: float | None = None,
+        strike_zone_bottom: float | None = None,
+    ) -> api_types.PredictBatterResponse:
         """
         Given a context, predict the batter's next outcome.
         """
         self.logger.debug("predict_batter called")
 
-        resolved_name = resolve_algorithm_name(algorithm)
-        alg = self.algorithms.get(resolved_name) or self.algorithms.get(algorithm)
+        request = api_types.PredictBatterRequest(
+            pitcher_id=pitcher_id,
+            batter_id=batter_id,
+            pitch_type=pitch_type,
+            pitch_speed=pitch_speed,
+            pitch_x=pitch_x,
+            pitch_z=pitch_z,
+            prev_pitches=prev_pitches,
+            algorithm=algorithm,
+            sample_size=sample_size,
+            pitcher_age=pitcher_age,
+            pitcher_throws=pitcher_throws,
+            batter_age=batter_age,
+            batter_hits=batter_hits,
+            count_balls=count_balls,
+            count_strikes=count_strikes,
+            outs=outs,
+            bases_state=bases_state,
+            score_bat=score_bat,
+            score_fld=score_fld,
+            inning=inning,
+            pitch_number=pitch_number,
+            number_through_order=number_through_order,
+            game_date=game_date,
+            fielder_2_id=fielder_2_id,
+            fielder_3_id=fielder_3_id,
+            fielder_4_id=fielder_4_id,
+            fielder_5_id=fielder_5_id,
+            fielder_6_id=fielder_6_id,
+            fielder_7_id=fielder_7_id,
+            fielder_8_id=fielder_8_id,
+            fielder_9_id=fielder_9_id,
+            batter_days_since_prev_game=batter_days_since_prev_game,
+            pitcher_days_since_prev_game=pitcher_days_since_prev_game,
+            strike_zone_top=strike_zone_top,
+            strike_zone_bottom=strike_zone_bottom,
+        )
+
+        resolved_name = resolve_algorithm_name(request.algorithm)
+        alg = self.algorithms.get(resolved_name) or self.algorithms.get(request.algorithm)
         if alg is None:
-            self.logger.error(f"unrecognized algorithm: {algorithm}")
+            self.logger.error(f"unrecognized algorithm: {request.algorithm}")
             raise HTTPException(
-                status_code=400, detail=f"unrecognized algorithm: {algorithm}"
+                status_code=400, detail=f"unrecognized algorithm: {request.algorithm}"
             )
         self.logger.debug(f"using algorithm: {resolved_name}")
 
         try:
-            result = await alg.predict_batter(
-                batter_name=batter_name,
-                pitcher_name=pitcher_name,
-                balls=balls,
-                strikes=strikes,
-                score_bat=score_bat,
-                score_fld=score_fld,
-                game_date=game_date,
-                pitch_type=pitch_type,
-                pitch_speed=pitch_speed,
-                pitch_x=pitch_x,
-                pitch_z=pitch_z,
-            )
+            result = await alg.predict_batter(request=request)
             self.logger.debug("predict_batter completed")
-            return result
+            if isinstance(result, api_types.PredictBatterResponse):
+                return result
+            return api_types.PredictBatterResponse(
+                algorithm_metadata=result.get("algorithm_metadata", {}),
+                basic_outcome_data=result.get("basic_outcome_data", {}),
+                detailed_outcome_data=result.get("detailed_outcome_data", {}),
+                prediction_metadata=result.get("prediction_metadata", {}),
+            )
         except HTTPException as e:
             self.logger.error(f"encountered HTTPException: {e}")
             raise e

@@ -12,6 +12,7 @@ from rich.table import Table
 
 if TYPE_CHECKING:
     from pitchpredict.types.api import PredictPitcherResponse
+    from pitchpredict.types.api import PredictBatterResponse
 
 console = Console()
 
@@ -278,7 +279,7 @@ def _format_pitcher_verbose(
 
 
 def format_batter_prediction(
-    response: dict[str, Any],
+    response: dict[str, Any] | "PredictBatterResponse",
     format_type: str = "rich",
     verbose: bool = False,
     compact: bool = True,
@@ -286,11 +287,15 @@ def format_batter_prediction(
     """
     Format and display batter prediction results.
     """
+    data = response
+    if hasattr(response, "model_dump"):
+        data = response.model_dump()
+
     if format_type == "json":
-        print(json.dumps(response, indent=2, default=str))
+        print(json.dumps(data, indent=2, default=str))
         return
 
-    basic = response.get("basic_outcome_data", {})
+    basic = data.get("basic_outcome_data", {})
     outcome_probs = basic.get("outcome_probs", {})
 
     if outcome_probs:
@@ -303,7 +308,7 @@ def format_batter_prediction(
         )
         console.print(table)
 
-    if verbose and (detailed := response.get("detailed_outcome_data")):
+    if verbose and (detailed := data.get("detailed_outcome_data")):
         _format_detailed_outcome(detailed, compact=compact)
 
 
