@@ -67,6 +67,16 @@ pip install -e ".[dev]"
 | tqdm | Progress bars |
 | wandb | Experiment tracking (for training) |
 
+### xLSTM Download Dependencies
+
+These are installed by default and used for automatic checkpoint downloads via Hugging Face Hub:
+
+| Package | Purpose |
+|---------|---------|
+| huggingface_hub | Download model weights |
+| filelock | Safe multi-process downloads |
+| safetensors | Load model weights |
+
 ### Development Dependencies
 
 | Package | Purpose |
@@ -97,7 +107,7 @@ print("PitchPredict installed successfully!")
 
 ## GPU Support
 
-For deep learning features, PitchPredict uses PyTorch which can leverage GPU acceleration. GPU support is optional but recommended for training models.
+For xLSTM features, PitchPredict uses PyTorch which can leverage GPU acceleration. GPU support is optional but recommended for running models.
 
 To use GPU:
 

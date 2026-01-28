@@ -8,7 +8,7 @@ from fastapi import HTTPException
 import pybaseball  # type: ignore
 
 from pitchpredict.backend.algs.base import PitchPredictAlgorithm
-from pitchpredict.backend.algs.similarity.base import SimilarityAlgorithm
+from pitchpredict.backend.algs import get_algorithm_by_name, get_available_algorithms
 from pitchpredict.backend.caching import PitchPredictCache
 from pitchpredict.backend.fetching import (
     get_player_id_from_name,
@@ -46,7 +46,8 @@ class PitchPredict:
         self.fuzzy_player_lookup = fuzzy_player_lookup
         if algorithms is None:
             algorithms = {
-                "similarity": SimilarityAlgorithm(),
+                name: get_algorithm_by_name(name)
+                for name in get_available_algorithms()
             }
         self.algorithms = algorithms
         self.__post_init__()
@@ -81,12 +82,12 @@ class PitchPredict:
                     alg.cache = self.cache
 
         # check algorithms
-        VALID_ALGORITHMS = ["similarity", "deep"]
-        if self.algorithms == []:
-            self.logger.error("algorithms is an empty list")
+        valid_algorithms = set(get_available_algorithms())
+        if not self.algorithms:
+            self.logger.error("algorithms is empty")
             raise ValueError("at least one algorithm must be specified")
         for algorithm in self.algorithms:
-            if algorithm not in VALID_ALGORITHMS:
+            if algorithm not in valid_algorithms:
                 self.logger.error(f"unrecognized algorithm: {algorithm}")
                 raise ValueError(f"unrecognized algorithm: {algorithm}")
 

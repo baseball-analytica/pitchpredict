@@ -105,12 +105,14 @@ async def predict_pitcher(
 |-----------|------|-------------|
 | `pitcher_id` | `int` | MLBAM pitcher ID |
 | `batter_id` | `int` | MLBAM batter ID |
-| `prev_pitches` | `list[Pitch] \| None` | Optional pitch sequence context |
-| `algorithm` | `str` | Algorithm to use: `"similarity"` or `"deep"` |
+| `prev_pitches` | `list[Pitch] \| None` | Required for xLSTM (use `[]` for cold-start) |
+| `algorithm` | `str` | Algorithm to use: `"similarity"` or `"xlstm"` |
 | `sample_size` | `int` | Number of pitches to sample |
 | `game_date` | `str \| None` | Game date in "YYYY-MM-DD" format |
 
 Additional optional context fields include count, bases, score, inning, fielders, rest days, and strike zone bounds (see `PredictPitcherRequest` for the full list).
+
+**xLSTM requirements:** When `algorithm="xlstm"`, `prev_pitches` is required and every pitch in the list must include a `pa_id`. Weights are loaded lazily on first use; set `PITCHPREDICT_XLSTM_PATH` to a local checkpoint directory (`model.safetensors` + `config.json`) if you want to bypass downloads. xLSTM is only available for pitcher predictions.
 
 #### Returns
 
@@ -201,7 +203,7 @@ async def predict_batter(
 | `pitch_speed` | `float` | Pitch speed in mph |
 | `pitch_x` | `float` | Horizontal location at plate (feet from center) |
 | `pitch_z` | `float` | Vertical location at plate (feet from ground) |
-| `algorithm` | `str` | Algorithm to use: `"similarity"` or `"deep"` |
+| `algorithm` | `str` | Algorithm to use: `"similarity"` |
 
 #### Returns
 

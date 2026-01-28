@@ -84,3 +84,14 @@ async def test_predict_pitcher_raises_for_unknown_algorithm(tmp_path: Any) -> No
         )
 
     assert exc.value.status_code == 400
+
+
+def test_pitchpredict_default_algorithms_include_xlstm_and_deep(tmp_path: Any) -> None:
+    api = PitchPredict(
+        enable_cache=False,
+        enable_logging=True,
+        log_dir=str(tmp_path),
+    )
+
+    assert "xlstm" in api.algorithms
+    assert "deep" in api.algorithms

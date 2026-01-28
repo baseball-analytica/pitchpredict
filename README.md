@@ -10,7 +10,7 @@ Cutting-edge MLB pitch-predicting software utilizing the latest Statcast data. O
 
 ## Features
 
-- **Two prediction algorithms**: Similarity-based (nearest neighbor) and deep learning (xLSTM)
+- **Two prediction algorithms**: Similarity-based (nearest neighbor) and xLSTM sequence model
 - **Multiple interfaces**: Python API, REST API server, and CLI
 - **Rich predictions**: Pitch type probabilities, speed/location distributions, outcome analysis
 - **Batted ball predictions**: Outcome probabilities from exit velocity and launch angle with context-aware filtering
@@ -78,6 +78,24 @@ Pitcher and batter IDs are MLBAM IDs; use `PitchPredict.get_player_id_from_name`
 Pitcher predictions return a `PredictPitcherResponse` model; use attribute access or `model_dump()` for a dict.
 
 Caching is enabled by default and stores data in `.pitchpredict_cache`. Delete the folder to refresh cached data.
+
+### xLSTM Quick Start
+
+For xLSTM predictions, you must pass `prev_pitches` (empty list allowed for cold-start):
+
+```python
+result = await client.predict_pitcher(
+    pitcher_id=pitcher_id,
+    batter_id=batter_id,
+    prev_pitches=[],  # required for xLSTM, empty list is cold-start
+    game_date="2024-06-15",
+    algorithm="xlstm",
+)
+```
+
+xLSTM loads weights lazily. Weights will download automatically on first use. Alternatively, set `PITCHPREDICT_XLSTM_PATH` to a local checkpoint directory containing `model.safetensors` and `config.json`.
+
+When providing history, each pitch in `prev_pitches` must include a `pa_id` (plate-appearance id).
 
 ### CLI
 
@@ -166,7 +184,7 @@ Full documentation is available in the [docs/](docs/) folder:
 - [Python API Reference](docs/python-api.md) - `PitchPredict` class documentation
 - [REST API Reference](docs/rest-api.md) - Server endpoints
 - [CLI Reference](docs/cli.md) - Command-line interface
-- [Algorithms](docs/algorithms.md) - Similarity and deep learning algorithms
+- [Algorithms](docs/algorithms.md) - Similarity and xLSTM algorithms
 - [Caching](docs/caching.md) - Cache behavior and storage layout
 
 ## Methodology
@@ -184,9 +202,9 @@ Finds historical pitches most similar to the current game context using weighted
 
 **Batted ball predictions** use continuous similarity scoring on exit velocity and launch angle, plus optional spray angle, bases state, outs, and date recency, then sample the top similar events for outcome probabilities and expected stats.
 
-### Deep Learning Algorithm
+### xLSTM Algorithm
 
-Uses an xLSTM sequence model trained on pitch sequences with a 270-token vocabulary encoding pitch type, speed, spin, location, and result. The model consumes contextual features (player IDs, count, bases, score, inning, and more) to predict the next pitch token sequence, which is decoded back into pitch attributes and outcomes.
+Uses an xLSTM sequence model trained on pitch sequences with a ~260-token vocabulary encoding pitch type, speed, spin, location, and result. The model consumes contextual features (player IDs, count, bases, score, inning, and more) to predict the next pitch token sequence, which is decoded back into pitch attributes and outcomes.
 
 ## Acknowledgements
 
